@@ -32,3 +32,6 @@ add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/googletest-src
 set(CMAKE_CXX_STANDARD 17)
 
 add_executable(server main.cpp game.cpp game.h player.cpp player.h communicationManager.cpp communicationManager.h common.h)
+
+add_executable(test test/gameTests.cpp)
+target_link_libraries(test gtest_main fmt)

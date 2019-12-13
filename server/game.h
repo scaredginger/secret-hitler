@@ -141,7 +141,7 @@ private:
 	}
 
 	std::tuple<Team, Team, Team> peekThreeCards() {
-		return { deck[0], deck[1], deck[2] };
+		return { Team(deck[0]), Team(deck[1]), Team(deck[2]) };
 	}
 
 public:
@@ -181,7 +181,7 @@ private:
 		runElection(jaVotes, neinVotes);
 	}
 
-	void checkForFascistHitlerWin() {
+	bool checkForFascistHitlerWin() {
 		return fascistPolicies >= 3 && chancellorId == hitler;
 	}
 

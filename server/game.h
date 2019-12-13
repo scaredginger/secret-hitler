@@ -64,9 +64,9 @@ static constexpr int policyCount = totalFascistPolicies + totalLiberalPolicies;
 
 private:
 	CommunicationManager &comms;
-	std::array<std::unique_ptr<Player>, noPlayers> players;
+	std::array<Player, noPlayers> players;
 	std::minstd_rand0 rng;
-	std::bitset<policyCount> deck;
+	std::bitset<policyCount + 1> deck;
 
 	State state = AWAITING_CHANCELLOR_NOMINATION;
 	int liberalPolicies = 0;
@@ -85,6 +85,7 @@ private:
 
 	Team firstPolicy;
 	Team secondPolicy;
+private:
 	Team thirdPolicy;
 
 
@@ -118,20 +119,24 @@ private:
 		int i;
 		int j = totalLiberalPolicies - liberalPolicies;
 		for (i = 0; j && i < noPolicies; i++) {
-			if (std::uniform_int_distribution(j, noPolicies - 1)(rng) < j) {
+			if (std::uniform_int_distribution(0, noPolicies - i - 1)(rng) < j) {
 				j--;
 				deck[i] = LIBERAL;
+			} else {
+				deck[i] = FASCIST;
 			}
 		}
-		for (i = 0; i < noPolicies; i++) {
+		for (; i < noPolicies; i++) {
 			deck[i] = FASCIST;
 		}
 		deck[noPolicies] = 1;
 	}
 
 	[[nodiscard]] Team servePolicy() {
-		Team p = deck[0];
+		bool isSet = deck.test(0);
 		deck >>= 1;
+		Team p = static_cast<Team>(static_cast<int>(isSet));
+		return p;
 	}
 
 	void reshuffleIfNecessary() {
@@ -147,7 +152,7 @@ private:
 public:
 	void addVote(int playerId, Vote v) {
 		Player &player = players[playerId];
-		if (player.hasVoted() || !player.alive()) {
+		if (player.voted() || !player.alive()) {
 			return;
 		}
 		if (v == JA) {
@@ -157,7 +162,7 @@ public:
 		} else {
 			return;
 		}
-		player.hasVoted(true);
+		player.voted(true);
 		runElectionIfAllHaveVoted();
 	}
 
@@ -234,9 +239,9 @@ private:
 	}
 
 public:
-	void enactPresidentPolicy(PolicyChoice p) {
+	void removePresidentPolicy(PolicyChoice removedPolicy) {
 		using std::swap;
-		switch (p) {
+		switch (removedPolicy) {
 			case FIRST:
 				swap(firstPolicy, thirdPolicy);
 				break;
@@ -258,13 +263,13 @@ private:
 	}
 
 public:
-	void enactChancellorPolicy(PolicyChoice p) {
+	void removeChancellorPolicy(PolicyChoice p) {
 		switch(p) {
 			case FIRST:
-				enactPolicy(firstPolicy);
+				enactPolicy(secondPolicy);
 				break;
 			case SECOND:
-				enactPolicy(secondPolicy);
+				enactPolicy(firstPolicy);
 				break;
 			case VETO:
 				requestVeto();
@@ -356,7 +361,7 @@ private:
 	}
 
 	bool chancellorIsValid(int id) {
-		if (!players[id].alive() || previousChancellorId == id) {
+		if (!players[id].alive() || previousChancellorId == id || id == presidentId) {
 			return false;
 		}
 		if (id != previousPresidentId) {
@@ -378,7 +383,7 @@ public:
 private:
 	void startVoting() {
 		for (auto &p : players) {
-			p.hasVoted(false);
+			p.voted(false);
 		}
 		state = VOTING;
 		comms.announceVote();
@@ -501,6 +506,59 @@ private:
 
 	void power4() {
 		makePresidentKillPlayer();
+	}
+
+public:
+	State getState() const {
+		return state;
+	}
+
+	int getLiberalPolicies() const {
+		return liberalPolicies;
+	}
+
+	int getFascistPolicies() const {
+		return fascistPolicies;
+	}
+
+	int getPresidentCounter() const {
+		return presidentCounter;
+	}
+
+	int getPresidentId() const {
+		return presidentId;
+	}
+
+	int getChancellorId() const {
+		return chancellorId;
+	}
+
+	int getElectionTracker() const {
+		return electionTracker;
+	}
+
+	int getPreviousPresidentId() const {
+		return previousPresidentId;
+	}
+
+	int getPreviousChancellorId() const {
+		return previousChancellorId;
+	}
+
+	int getHitler() const {
+		return hitler;
+	}
+
+	Team getFirstPolicy() const {
+		return firstPolicy;
+	}
+
+	Team getSecondPolicy() const {
+		return secondPolicy;
+	}
+
+	Team getThirdPolicy() const {
+		return thirdPolicy;
 	}
 };
 

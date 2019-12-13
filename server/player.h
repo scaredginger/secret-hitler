@@ -16,7 +16,7 @@ private:
 		INVESTIGATED = ALIVE << 1,
 		LAST_VOTE = INVESTIGATED << 1
 	};
-	unsigned flags = 0;
+	unsigned flags = ALIVE;
 
 public:
 	bool loyalty() {
@@ -37,13 +37,13 @@ public:
 		flags |= isAlive * ALIVE;
 	}
 
-	bool hasVoted() {
+	bool voted() {
 		return (VOTED & flags) == VOTED;
 	}
 
-	void hasVoted(bool voted) {
+	void voted(bool v) {
 		flags &= ~VOTED;
-		flags |= voted * VOTED;
+		flags |= v * VOTED;
 	}
 
 	Vote lastVote() {

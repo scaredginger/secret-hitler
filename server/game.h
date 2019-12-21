@@ -7,14 +7,11 @@
 #include <random>
 
 #include "common.h"
-#include "communicationManager.h"
+#include "manager.h"
 #include "player.h"
 
 #ifndef SERVER_GAME_H
 #define SERVER_GAME_H
-
-template <GameType, int>
-struct PowerParams;
 
 /** The main game
  * @tparam gameType: the number of players in the game
@@ -22,7 +19,7 @@ struct PowerParams;
  *
  * The class is a finite state machine, with transitions caused by calling public methods
  * The pattern is that the CommunicationManager will call a public method, and
- * 		the class will transition, then run a callback method on the communication manager
+ * 		the class will transition, then run a callback method on the communication comms
  * If the arguments given to a method are invalid, a transition won't occur
  * Otherwise, this class trusts its input. It doesn't check if it's in the correct state, nothing is bounds checked,
  * 		and it doesn't check if inputs come from the correct players. This should be done by the CommunicationManager
@@ -31,12 +28,13 @@ struct PowerParams;
  * The end of the deck is marked with a set bit, and all bits above it are zero.
  * Therefore, if we shift down and have no set bits, we must reshuffle.
  */
-template <GameType gameType, typename CommunicationManager>
+template <typename CommunicationManager>
 class Game {
 public:
 	enum State {
-		AWAITING_CHANCELLOR_NOMINATION,
+		NOT_STARTED = 0,
 		VOTING,
+		AWAITING_CHANCELLOR_NOMINATION,
 		AWAITING_PRESIDENT_POLICY,
 		AWAITING_CHANCELLOR_POLICY,
 		AWAITING_CHANCELLOR_POLICY_NO_VETO,
@@ -57,18 +55,18 @@ public:
 		VETO = 2,
 	};
 
-static constexpr int noPlayers = getNoPlayers<gameType>();
 static constexpr int totalLiberalPolicies = 6;
 static constexpr int totalFascistPolicies = 11;
 static constexpr int policyCount = totalFascistPolicies + totalLiberalPolicies;
 
 private:
 	CommunicationManager &comms;
-	std::array<Player, noPlayers> players;
+	std::array<Player, 10> players;
 	std::minstd_rand0 rng;
+	int playerCount = 0;
 	std::bitset<policyCount + 1> deck;
 
-	State state = AWAITING_CHANCELLOR_NOMINATION;
+	State state = NOT_STARTED;
 	int liberalPolicies = 0;
 	int fascistPolicies = 0;
 
@@ -90,50 +88,90 @@ private:
 
 
 private:
-	void init() {
-		shuffleDeck();
-		auto playerSelector = std::uniform_int_distribution(0, noPlayers - 1);
-		presidentId = playerSelector(rng);
-		presidentCounter = presidentId;
+	void assignRoles() {
+		auto playerSelector = std::uniform_int_distribution(0, playerCount - 1);
 		hitler = playerSelector(rng);
+		players[hitler].team(FASCIST);
+		int remainingFascists; // not including Hitler
+		switch(playerCount) {
+			case FIVE:
+			case SIX:
+				remainingFascists = 1;
+				break;
+			case SEVEN:
+			case EIGHT:
+				remainingFascists = 2;
+				break;
+			case NINE:
+			case TEN:
+				remainingFascists = 3;
+				break;
+		}
+		for (auto i = 0; i < hitler; i++) {
+			if (std::uniform_int_distribution(0, playerCount - i - 1)(rng) < remainingFascists) {
+				remainingFascists--;
+				players[i].team(FASCIST);
+			} else {
+				players[i].team(LIBERAL);
+			}
+		}
+		for (auto i = hitler + 1; i < playerCount; i++) {
+			if (std::uniform_int_distribution(0, playerCount - i - 1)(rng) < remainingFascists) {
+				remainingFascists--;
+				players[i].team(FASCIST);
+			} else {
+				players[i].team(LIBERAL);
+			}
+		}
 	}
 
 public:
 	Game(CommunicationManager &comms) : comms(comms) {
-		using namespace std::chrono;
-		auto t = high_resolution_clock::now().time_since_epoch();
-		auto value = duration_cast<duration<unsigned long long>>(t).count();
-		rng.seed(value);
-		init();
 	}
 
-	Game(CommunicationManager &comms, unsigned long long seed) : comms(comms) {
+	void init(unsigned long long seed) {
+		playerCount = comms.getClientCount();
 		rng.seed(seed);
-		init();
+		shuffleDeck();
+		auto playerSelector = std::uniform_int_distribution(0, playerCount - 1);
+		presidentId = playerSelector(rng);
+		presidentCounter = presidentId;
+		assignRoles();
+		for (auto &p : players) {
+			p.alive(true);
+		}
+		moveToNextPresident();
+	}
+
+	void init() {
+		using namespace std::chrono;
+		auto t = high_resolution_clock::now().time_since_epoch();
+		auto seed = duration_cast<duration<unsigned long long>>(t).count();
+		init(seed);
 	}
 
 private:
 	void shuffleDeck() {
 		deck.reset();
-		const int noPolicies = policyCount - liberalPolicies - fascistPolicies;
+		const int remainingPolicies = policyCount - liberalPolicies - fascistPolicies;
 		int i;
 		int j = totalLiberalPolicies - liberalPolicies;
-		for (i = 0; j && i < noPolicies; i++) {
-			if (std::uniform_int_distribution(0, noPolicies - i - 1)(rng) < j) {
+		for (i = 0; j && i < remainingPolicies; i++) {
+			if (std::uniform_int_distribution(0, remainingPolicies - i - 1)(rng) < j) {
 				j--;
 				deck[i] = LIBERAL;
 			} else {
 				deck[i] = FASCIST;
 			}
 		}
-		for (; i < noPolicies; i++) {
+		for (; i < remainingPolicies; i++) {
 			deck[i] = FASCIST;
 		}
-		deck[noPolicies] = 1;
+		deck[remainingPolicies] = 1;
 	}
 
 	[[nodiscard]] Team servePolicy() {
-		bool isSet = deck.test(0);
+		bool isSet = deck[0];
 		deck >>= 1;
 		Team p = static_cast<Team>(static_cast<int>(isSet));
 		return p;
@@ -145,11 +183,11 @@ private:
 		}
 	}
 
-	std::tuple<Team, Team, Team> peekThreeCards() {
-		return { Team(deck[0]), Team(deck[1]), Team(deck[2]) };
+public:
+	std::tuple<Team, Team, Team> peekTopCards() {
+		return { Team(bool(deck[0])), Team(bool(deck[1])), Team(bool(deck[2])) };
 	}
 
-public:
 	void addVote(int playerId, Vote v) {
 		Player &player = players[playerId];
 		if (player.voted() || !player.alive()) {
@@ -170,7 +208,8 @@ private:
 	void runElectionIfAllHaveVoted() {
 		int jaVotes = 0;
 		int neinVotes = 0;
-		for (auto &p : players) {
+		for (int i = 0; i < playerCount; i++) {
+			auto &p = players[i];
 			if (!p.alive()) {
 				continue;
 			}
@@ -186,15 +225,17 @@ private:
 		runElection(jaVotes, neinVotes);
 	}
 
-	bool checkForFascistHitlerWin() {
+	[[nodiscard]] bool checkForFascistHitlerWin() {
 		return fascistPolicies >= 3 && chancellorId == hitler;
 	}
 
 	void runElection(int jaVotes, int neinVotes) {
 		if (jaVotes > neinVotes) {
+			comms.successfulElection();
 			successfulElection();
 		} else {
-			failedGovernment();
+			comms.failedElection();
+			incrementElectionTracker();
 		}
 	}
 
@@ -207,17 +248,19 @@ private:
 		sendPresidentPolicy();
 	}
 
-	void failedGovernment() {
+	void incrementElectionTracker() {
 		electionTracker++;
 		if (electionTracker == 3) {
 			auto p = servePolicy();
 			if (p == FASCIST) {
 				fascistPolicies++;
+				comms.chaoticFascistPolicy();
 				if (fascistPolicies == 6) {
 					return fascistPolicyWin();
 				}
 			} else {
 				liberalPolicies++;
+				comms.chaoticLiberalPolicy();
 				if (liberalPolicies == 5) {
 					return liberalPolicyWin();
 				}
@@ -272,7 +315,9 @@ public:
 				enactPolicy(firstPolicy);
 				break;
 			case VETO:
-				requestVeto();
+				if (fascistPolicies == 5 && state == AWAITING_CHANCELLOR_POLICY)
+					requestVeto();
+				break;
 			default:
 				break;
 		}
@@ -283,6 +328,7 @@ private:
 		electionTracker = 0;
 		if (p == FASCIST) {
 			fascistPolicies++;
+			comms.regularFascistPolicy();
 			switch (fascistPolicies) {
 				case 1:
 					return power0();
@@ -301,6 +347,7 @@ private:
 			}
 		} else {
 			liberalPolicies++;
+			comms.regularLiberalPolicy();
 			if (liberalPolicies == 5) {
 				return liberalPolicyWin();
 			}
@@ -322,7 +369,7 @@ public:
 			state = AWAITING_CHANCELLOR_POLICY_NO_VETO;
 			return comms.sendChancellorPolicyChoice();
 		}
-		failedGovernment();
+		incrementElectionTracker();
 	}
 
 private:
@@ -350,24 +397,24 @@ private:
 		if (specialElection) {
 			specialElection = false;
 		} else {
-			presidentCounter = (presidentCounter + 1) % noPlayers;
+			presidentCounter = (presidentCounter + 1) % playerCount;
 		}
 		while (!players[presidentCounter].alive()) {
-			presidentCounter = (presidentCounter + 1) % noPlayers;
+			presidentCounter = (presidentCounter + 1) % playerCount;
 		}
 		presidentId = presidentCounter;
 		state = AWAITING_CHANCELLOR_NOMINATION;
 		comms.requestChancellorNomination();
 	}
 
-	bool chancellorIsValid(int id) {
+	[[nodiscard]] bool chancellorIsValid(int id) {
 		if (!players[id].alive() || previousChancellorId == id || id == presidentId) {
 			return false;
 		}
 		if (id != previousPresidentId) {
 			return true;
 		}
-		int alivePlayers = std::count_if(players.begin(), players.end(), [](Player p) { return p.alive(); });
+		int alivePlayers = std::count_if(players.begin(), players.begin() + playerCount, [](Player p) { return p.alive(); });
 		return alivePlayers <= 5;
 	}
 
@@ -382,8 +429,8 @@ public:
 
 private:
 	void startVoting() {
-		for (auto &p : players) {
-			p.voted(false);
+		for (auto i = 0; i < playerCount; i++) {
+			players[i].voted(false);
 		}
 		state = VOTING;
 		comms.announceVote();
@@ -398,13 +445,16 @@ private:
 		comms.requestInvestigation();
 	}
 
+	bool canBeInvestigated(int playerId) {
+		return !players[playerId].investigated() && playerId != presidentId && players[playerId].alive();
+	}
 public:
 	void revealLoyalty(int playerId) {
-		if (players[playerId].investigated() || playerId == presidentId || !players[playerId].alive()) {
+		if (!canBeInvestigated(playerId)) {
 			return;
 		}
 		players[playerId].investigated(true);
-		comms.sendLoyalty(playerId, players[playerId].loyalty());
+		comms.sendLoyalty(playerId, players[playerId].team());
 		moveToNextPresident();
 	}
 
@@ -450,7 +500,7 @@ public:
 
 private:
 	void power0() {
-		switch(noPlayers) {
+		switch(playerCount) {
 			case FIVE:
 			case SIX:
 			case SEVEN:
@@ -467,7 +517,7 @@ private:
 	}
 
 	void power1() {
-		switch(noPlayers) {
+		switch(playerCount) {
 			case FIVE:
 			case SIX:
 				nullPower();
@@ -484,7 +534,7 @@ private:
 	}
 
 	void power2() {
-		switch(noPlayers) {
+		switch(playerCount) {
 			case FIVE:
 			case SIX:
 				showPresidentTopCards();
@@ -559,6 +609,47 @@ public:
 
 	Team getThirdPolicy() const {
 		return thirdPolicy;
+	}
+
+	// TODO: rename this
+	std::bitset<10> getEligibleChancellors() {
+		std::bitset<10> result(0);
+		for (auto i = 0; i < playerCount; i++) {
+			result[i] = chancellorIsValid(i);
+		}
+		return result;
+	}
+
+	std::bitset<10> eligibleForInvestigation() {
+		std::bitset<10> result(0);
+		for (auto i = 0; i < playerCount; i++) {
+			result[i] = canBeInvestigated(i);
+		}
+		return result;
+	}
+
+	std::bitset<10> alive() {
+		std::bitset<10> result(0);
+		for (auto i = 0; i < playerCount; i++) {
+			result[i] = players[i].alive();
+		}
+		return result;
+	}
+
+	std::bitset<10> getBallot() {
+		std::bitset<10> result(0);
+		for (auto i = 0; i < playerCount; i++) {
+			result[i] = players[i].lastVote();
+		}
+		return result;
+	}
+
+	std::bitset<10> getTeams() {
+		std::bitset<10> result(0);
+		for (auto i = 0; i < playerCount; i++) {
+			result[i] = players[i].team();
+		}
+		return result;
 	}
 };
 

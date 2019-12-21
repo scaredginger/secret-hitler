@@ -1,7 +1,3 @@
-//
-// Created by ak on 12/12/19.
-//
-
 #ifndef SERVER_COMMON_H
 #define SERVER_COMMON_H
 
@@ -16,8 +12,7 @@ enum GameType {
 
 enum Vote {
 	NEIN = 0,
-	JA = 1,
-	ABSTAIN = 2
+	JA = 1
 };
 
 enum Team {
@@ -26,7 +21,7 @@ enum Team {
 };
 
 template <GameType type>
-inline constexpr int getNoPlayers() {
+inline constexpr int getPlayerCount() {
 	switch (type) {
 		case FIVE:
 			return 5;

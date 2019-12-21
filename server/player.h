@@ -16,14 +16,14 @@ private:
 		INVESTIGATED = ALIVE << 1,
 		LAST_VOTE = INVESTIGATED << 1
 	};
-	unsigned flags = ALIVE;
+	unsigned flags = 0;
 
 public:
-	bool loyalty() {
-		return (TEAM & flags) == TEAM;
+	Team team() {
+		return (TEAM & flags) == TEAM ? LIBERAL : FASCIST;
 	}
 
-	void loyalty(Team team) {
+	void team(Team team) {
 		flags &= ~TEAM;
 		flags |= team * TEAM;
 	}

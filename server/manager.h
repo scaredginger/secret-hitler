@@ -148,12 +148,18 @@ public:
 		if (clientCount >= 10) {
 			return -1;
 		}
+        auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+        for (int j = 0; j < 10; j++) {
+            auto &c = clients[j];
+            if (c.connected()) {
+                ptr[0] = (j << 4) | NAME;
+            }
+            std::string_view(&sendBuffer[1], sizeof(sendBuffer) - 1) = c.getName();
+            ws->send(std::string_view(sendBuffer, c.getName().length() + 1));
+        }
 		int i;
-		for (i = 0; i < 10; i++) {
-			if (!clients[i].connected()) {
-				break;
-			}
-		}
+		for (i = 0; i < 10 && clients[i].connected(); i++) {}
+		clientCount++;
 		clients[i] = Client(ws);
 		return i;
 	}
@@ -317,16 +323,14 @@ private:
 
 	private:
 	void announceName(int id) {
-		sendBuffer[0] = 0;
-		sendBuffer[1] = 0;
-		int i = 2;
-		for (auto c : clients[id].getName()) {
-			sendBuffer[i] = c;
-			i++;
-		}
-		std::string_view message(sendBuffer, i);
-		for (auto &client : clients) {
-			client.safeSend(message);
+	    auto &c = clients[id];
+        auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+        ptr[0] = (id << 4) | NAME;
+        std::string_view(&sendBuffer[1], sizeof(sendBuffer) - 1) = c.getName();
+		std::string_view message(sendBuffer, c.getName().size() + 1);
+		for (auto i = 0; i < id; i++) {
+		    auto &k = clients[i];
+		    k.safeSend(message);
 		}
 	}
 
@@ -451,6 +455,7 @@ public:
 		READY_TO_START,
 		NOT_READY,
 		TEAM,
+		NAME,
 		EXTENDED
 	};
 

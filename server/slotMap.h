@@ -37,10 +37,10 @@ private:
 	std::vector<std::vector<Key>> freeSlots;
 
 	void addManagerSet() {
-		managers.emplace_back().resize(sizeof(MinorIndex));
+		managers.emplace_back().resize(1 << (8 * sizeof(MinorIndex)));
 		auto &keys = freeSlots.emplace_back();
 		keys.reserve(sizeof(MinorIndex));
-		for (int i = 0; i < (1 << sizeof(MinorIndex)); i++) {
+		for (int i = 0; i < (1 << (8 * sizeof(MinorIndex))); i++) {
 			keys.push_back(Key(0, managers.size() - 1, i));
 		}
 	}
@@ -48,6 +48,9 @@ private:
 	void reclaim(Key key) {
 		key.g++;
 		freeSlots[key.M].push_back(key);
+
+        auto &outer = managers[key.M];
+        std::get<1>(outer[key.m])++;
 	}
 
 public:

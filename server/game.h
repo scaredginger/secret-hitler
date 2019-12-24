@@ -71,9 +71,9 @@ private:
 	int fascistPolicies = 0;
 
 	int hitler = -1;
-	int presidentCounter;
-	int presidentId;
-	int chancellorId;
+	int presidentCounter = -1;
+	int presidentId = -1;
+	int chancellorId = -1;
 
 	int electionTracker = 0;
 	bool specialElection = false;
@@ -81,10 +81,10 @@ private:
 	int previousPresidentId = -1;
 	int previousChancellorId = -1;
 
-	Team firstPolicy;
-	Team secondPolicy;
+	Team firstPolicy = FASCIST;
+	Team secondPolicy = FASCIST;
 private:
-	Team thirdPolicy;
+	Team thirdPolicy = FASCIST;
 
 
 private:
@@ -126,7 +126,7 @@ private:
 	}
 
 public:
-	Game(CommunicationManager &comms) : comms(comms) {
+	explicit Game(CommunicationManager &comms) : comms(comms) {
 	}
 
 	void init(unsigned long long seed) {
@@ -433,7 +433,7 @@ private:
 			players[i].voted(false);
 		}
 		state = VOTING;
-		comms.announceVote();
+		comms.announceElection();
 	}
 
 	void nullPower() {

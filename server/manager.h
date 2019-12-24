@@ -18,7 +18,7 @@ struct UserData {
 
 class Client {
 private:
-	WebSocket *socket;
+	WebSocket *socket = nullptr;
 	std::string name;
 
 	WebSocket *getSocket() {
@@ -27,7 +27,7 @@ private:
 	}
 
 public:
-	Client() : socket(nullptr) {
+	Client() {
 	}
 
 	explicit Client(WebSocket *ws) : socket(ws) {}
@@ -153,9 +153,9 @@ public:
             auto &c = clients[j];
             if (c.connected()) {
                 ptr[0] = (j << 4) | NAME;
+                c.getName().copy(sendBuffer + 1, sizeof(sendBuffer) - 1);
+                ws->send(std::string_view(sendBuffer, c.getName().length() + 1));
             }
-            std::string_view(&sendBuffer[1], sizeof(sendBuffer) - 1) = c.getName();
-            ws->send(std::string_view(sendBuffer, c.getName().length() + 1));
         }
 		int i;
 		for (i = 0; i < 10 && clients[i].connected(); i++) {}
@@ -236,7 +236,6 @@ private:
 		auto teamFlags = teams.to_ulong();
 		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
 		ptr[0] = TEAM;
-		ptr[1] = TEAM | (hitler << 4);
 		int fasc = -1;
 
 		int hitlerNumber = (teams.count() - (teams >> hitler).count() - 1) & 3;
@@ -326,7 +325,7 @@ private:
 	    auto &c = clients[id];
         auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
         ptr[0] = (id << 4) | NAME;
-        std::string_view(&sendBuffer[1], sizeof(sendBuffer) - 1) = c.getName();
+        c.getName().copy(sendBuffer + 1, sizeof(sendBuffer) - 1);
 		std::string_view message(sendBuffer, c.getName().size() + 1);
 		for (auto i = 0; i < id; i++) {
 		    auto &k = clients[i];
@@ -440,9 +439,19 @@ private:
 	}
 
 public:
+	void sendGameKey(int id, uint32_t key) {
+        auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+        ptr[0] = GAME_KEY;
+        ptr[1] = (key >> 24) & 255;
+        ptr[2] = (key >> 16) & 255;
+        ptr[3] = (key >> 8) & 255;
+        ptr[4] = key & 255;
+        std::string_view message(sendBuffer, 5);
+        clients[id].send(message);
+	}
+
 	enum MessageCode {
-		ANNOUNCE_VOTE = 0,
-		REQUEST_CHANCELLOR_NOMINATION,
+        ANNOUNCE_ELECTION = 0,
 		REQUEST_PRESIDENT_POLICY_CHOICE,
 		REQUEST_CHANCELLOR_POLICY_CHOICE,
 		REQUEST_INVESTIGATION,
@@ -462,28 +471,27 @@ public:
 	static_assert(EXTENDED < 16);
 
 	enum ExtendedMessageCodes {
-		REQUEST_PRESIDENT_VETO = 0 * 16,
-		LIBERAL_POLICY_WIN = 1 * 16,
-		LIBERAL_HITLER_WIN = 2 * 16,
-		FASCIST_POLICY_WIN = 3 * 16,
-		FASCIST_HITLER_WIN = 4 * 16,
-		REQUEST_SPECIAL_NOMINATION = 5 * 16,
-		REASSIGN = 6 * 16,
-		REGULAR_FASCIST_POLICY = 7 * 16,
-		CHAOTIC_FASCIST_POLICY = 8 * 16,
-		REGULAR_LIBERAL_POLICY = 9 * 16,
-		CHAOTIC_LIBERAL_POLICY = 10 * 16,
-		GAME_KEY = 11 * 16
+		REQUEST_PRESIDENT_VETO = 0 * 16 | EXTENDED,
+		LIBERAL_POLICY_WIN = 1 * 16 | EXTENDED,
+		LIBERAL_HITLER_WIN = 2 * 16 | EXTENDED,
+		FASCIST_POLICY_WIN = 3 * 16 | EXTENDED,
+		FASCIST_HITLER_WIN = 4 * 16 | EXTENDED,
+		REQUEST_SPECIAL_NOMINATION = 5 * 16 | EXTENDED,
+		REASSIGN = 6 * 16 | EXTENDED,
+		REGULAR_FASCIST_POLICY = 7 * 16 | EXTENDED,
+		CHAOTIC_FASCIST_POLICY = 8 * 16 | EXTENDED,
+		REGULAR_LIBERAL_POLICY = 9 * 16 | EXTENDED,
+		CHAOTIC_LIBERAL_POLICY = 10 * 16 | EXTENDED,
+        REQUEST_CHANCELLOR_NOMINATION = 11 * 16 | EXTENDED,
+		GAME_KEY = 12 * 16 | EXTENDED
 	};
 
-	// TODO: rename this (e.g. announceElection)
-	void announceVote() {
+	void announceElection() {
 		auto president = game.getPresidentId();
 		auto chancellor = game.getPresidentId();
 		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
-		ptr[0] = ANNOUNCE_VOTE;
-		ptr[1] = president * 16 + chancellor;
-		broadcast(std::string_view(sendBuffer, 2));
+		ptr[0] = ANNOUNCE_ELECTION | (chancellor << 4);
+		broadcast(std::string_view(sendBuffer, 1));
 	}
 
 	void chaoticFascistPolicy() {
@@ -538,7 +546,7 @@ public:
 		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
 		ptr[0] = REQUEST_CHANCELLOR_NOMINATION;
 		auto v = game.getEligibleChancellors().to_ulong();
-		ptr[1] = game.getPresidentId() | ((v & 3) << 4);
+		ptr[1] = game.getPresidentId() | ((v & 3) << 6);
 		ptr[2] = (v >> 2) & 255;
 		broadcast(std::string_view(sendBuffer, 3));
 	}
@@ -613,7 +621,7 @@ public:
 			clients[i].send(message);
 		}
 		auto [a, b, c] = game.peekTopCards();
-		ptr[0] |= (a << 5) | (b << 6) | (c << 7);
+		ptr[0] |= 16 | (a << 5) | (b << 6) | (c << 7);
 		clients[game.getPresidentId()].send(message);
 	}
 

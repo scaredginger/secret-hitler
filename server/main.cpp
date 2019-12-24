@@ -4,6 +4,17 @@
 #include "manager.h"
 #include "slotMap.h"
 
+uint32_t decodeKey(std::string_view s) {
+    uint32_t residue = 16 * ((1U << ((s.size() - 1) * 4)) - 1) / 15;
+
+    uint32_t main = s.back() - 'a';
+    for (int i = s.size() - 2; i >= 0; --i) {
+        main *= 16;
+        main += s[i] - 'a';
+    }
+    return main + residue;
+}
+
 int main() {
 	/*
 	const char *key_file_key = "SSL_KEY";
@@ -23,14 +34,14 @@ int main() {
 		// .key_file_name = key_file_name,
 		// .cert_file_name = cert_file_name
 	// }).ws<UserData>("/joinGame/:game", {
-	uWS::App().ws<UserData>("/joinGame/:game", {
+	uWS::App().ws<UserData>("/join/:game", {
 		.open = [&managers](WebSocket *ws, uWS::HttpRequest *req) {
 			auto *data = static_cast<UserData *>(ws->getUserData());
 			data->socket = ws;
-			SlotMap::Key key(std::stoi(std::string(req->getParameter(0))));
+			SlotMap::Key key(decodeKey(req->getParameter(0)));
 			auto manager = managers[key];
 			if (!manager) {
-				ws->end(100);
+				ws->end(4500);
 				return;
 			}
 			Manager &m = manager.value();
@@ -46,11 +57,14 @@ int main() {
 			data->manager->handleMessage(data->playerId, message);
 		},
 		.close = [](WebSocket *ws, int code, std::string_view message) {
+		    if (code == 4500) {
+		        return;
+		    }
 			ignoreUnused(message);
 			auto *data = static_cast<UserData *>(ws->getUserData());
 			data->manager->onDisconnect(data->playerId, code);
 		}
-	}).ws<UserData>("/createGame", {
+	}).ws<UserData>("/create", {
 		.open = [&managers](WebSocket *ws, uWS::HttpRequest *req) {
 			ignoreUnused(req);
 			auto *data = static_cast<UserData *>(ws->getUserData());
@@ -64,6 +78,7 @@ int main() {
 			Manager &m = manager.value();
 			data->playerId = m.addClient(ws);
 			data->manager = &m;
+			m.sendGameKey(data->playerId, key.gameId());
 		},
 		.message = [](WebSocket *ws, std::string_view message, uWS::OpCode opCode) {
 			if (opCode != uWS::OpCode::BINARY) {

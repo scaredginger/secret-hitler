@@ -24,10 +24,10 @@ public:
 		Key(Generation g, MajorIndex M, MinorIndex m) : g(g), M(M), m(m) {}
 
 	public:
-		Key(uint32_t u) : g(u), M(u >> (sizeof(g) + sizeof(m))), m(u >> sizeof(g)) {}
+		Key(uint32_t u) : g(u), M(u >> (8 * (sizeof(g) + sizeof(m)))), m(u >> (8 * sizeof(g))) {}
 		uint32_t gameId() {
-			return (static_cast<uint32_t>(M) << (sizeof(g) + sizeof(m)))
-					| (static_cast<uint32_t>(m) << (sizeof(g)))
+			return (static_cast<uint32_t>(M) << ((sizeof(g) + sizeof(m)) * 8))
+					| (static_cast<uint32_t>(m) << (sizeof(g) * 8))
 					| (static_cast<uint32_t>(g));
 		}
 	};
@@ -37,11 +37,12 @@ private:
 	std::vector<std::vector<Key>> freeSlots;
 
 	void addManagerSet() {
-		managers.emplace_back().resize(1 << (8 * sizeof(MinorIndex)));
+		managers.emplace_back().resize(1U << (8 * sizeof(MinorIndex)));
 		auto &keys = freeSlots.emplace_back();
 		keys.reserve(sizeof(MinorIndex));
-		for (int i = 0; i < (1 << (8 * sizeof(MinorIndex))); i++) {
-			keys.push_back(Key(0, managers.size() - 1, i));
+		constexpr unsigned secondTierSize = (1U << (8 * sizeof(MinorIndex)));
+		for (unsigned i = 0; i < secondTierSize; i++) {
+			keys.push_back(Key(0, managers.size() - 1, secondTierSize - 1 - i));
 		}
 	}
 

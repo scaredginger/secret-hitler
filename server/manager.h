@@ -1,6 +1,7 @@
 #ifndef SERVER_COMMUNICATION_MANAGER_H
 #define SERVER_COMMUNICATION_MANAGER_H
 #include <cinttypes>
+#include <list>
 #include <algorithm>
 #include <App.h> // uWebSockets
 #include "common.h"
@@ -9,10 +10,17 @@
 // using WebSocket = uWS::WebSocket<true, true>;
 using WebSocket = uWS::WebSocket<false, true>;
 
+struct Message {
+    int length;
+    char data[256];
+    Message() = default;
+};
+
 class Manager;
 struct UserData {
 	WebSocket *socket;
 	Manager *manager;
+	std::list<Message> queue;
 	int playerId;
 };
 
@@ -27,8 +35,7 @@ private:
 	}
 
 public:
-	Client() {
-	}
+	Client() = default;
 
 	explicit Client(WebSocket *ws) : socket(ws) {}
 
@@ -65,7 +72,7 @@ public:
 	}
 
 	void ready(bool value) {
-		socket = reinterpret_cast<WebSocket *>(reinterpret_cast<uintptr_t>(socket) & (!!value));
+		socket = reinterpret_cast<WebSocket *>(reinterpret_cast<uintptr_t>(socket) | value);
 	}
 
 	bool voted() {
@@ -73,7 +80,7 @@ public:
 	}
 
 	void voted(bool value) {
-		socket = reinterpret_cast<WebSocket *>(reinterpret_cast<uintptr_t>(socket) & (!!value));
+		socket = reinterpret_cast<WebSocket *>((reinterpret_cast<uintptr_t>(socket) & ~1) | value);
 	}
 
 	bool connected() {
@@ -93,9 +100,28 @@ public:
 	}
 
 	void send(std::string_view view) {
-		if (!getSocket()->send(view, uWS::OpCode::BINARY, true)) {
-		    std::cout << "bad send\n";
-		}
+	    auto *s = getSocket();
+	    auto data = reinterpret_cast<UserData *>(s->getUserData());
+	    auto &q = data->queue;
+	    while (!q.empty()) {
+	        if (s->send(std::string_view(q.front().data, q.front().length))) {
+                q.pop_front();
+	        } else {
+	            break;
+	        }
+	    }
+	    if (q.empty()) {
+            if (s->send(view, uWS::OpCode::BINARY, true)) {
+            } else {
+                q.emplace_back();
+                auto &x = q.back();
+                x.length = view.copy(x.data, 256);
+            }
+        } else {
+	        q.emplace_back();
+            auto &x = q.back();
+	        x.length = view.copy(x.data, 256);
+	    }
 	}
 
 	void send(char *buf, int i) {
@@ -227,6 +253,7 @@ private:
 			c.voted(false);
 		}
 		sendTeams();
+		game.start();
 	}
 
 	// TODO: try to get this down to 2 bytes for fascists
@@ -386,7 +413,7 @@ private:
 		if (game.getState() != game.AWAITING_CHANCELLOR_NOMINATION) {
 			return;
 		}
-		game.nominateChancellor(id);
+		game.nominateChancellor(choice);
 	}
 
 	void reveal(int id, int choice) {
@@ -410,7 +437,7 @@ private:
 		if (game.getState() != game.AWAITING_SPECIAL_PRESIDENT_CHOICE) {
 			return;
 		}
-		game.useSpecialPresident(id);
+		game.useSpecialPresident(choice);
 	}
 
 	void castVote(int id, Vote vote) {
@@ -495,7 +522,10 @@ public:
 	};
 
 	void announceElection() {
-		auto chancellor = game.getPresidentId();
+	    for (auto &c : clients) {
+	        c.voted(false);
+	    }
+		auto chancellor = game.getChancellorId();
 		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
 		ptr[0] = ANNOUNCE_ELECTION | (chancellor << 4);
 		broadcast(std::string_view(sendBuffer, 1));
@@ -677,10 +707,10 @@ public:
 		}
 		switch(firstByte / 8) {
 			case 0:
-				castVote(id, NEIN);
+                castVote(id, JA);
 				return;
 			case 1:
-				castVote(id, JA);
+                castVote(id, NEIN);
 				return;
 			case 2:
 				respondToVeto(id, true);

@@ -1,3 +1,6 @@
+#ifndef SERVER_GAME_H
+#define SERVER_GAME_H
+
 #include <algorithm>
 #include <array>
 #include <bitset>
@@ -9,9 +12,6 @@
 #include "common.h"
 #include "manager.h"
 #include "player.h"
-
-#ifndef SERVER_GAME_H
-#define SERVER_GAME_H
 
 /** The main game
  * @tparam gameType: the number of players in the game
@@ -137,9 +137,12 @@ public:
 		presidentId = playerSelector(rng);
 		presidentCounter = presidentId;
 		assignRoles();
-		for (auto &p : players) {
-			p.alive(true);
+		for (auto i = 0; i < playerCount; i++) {
+            players[i].alive(true);
 		}
+	}
+
+	void start() {
 		moveToNextPresident();
 	}
 

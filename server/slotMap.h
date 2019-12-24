@@ -1,11 +1,11 @@
+#ifndef SERVER_SLOTMAP_H
+#define SERVER_SLOTMAP_H
 #include <vector>
 #include <cinttypes>
 #include <optional>
 #include <functional>
 #include "manager.h"
 
-#ifndef SERVER_SLOTMAP_H
-#define SERVER_SLOTMAP_H
 
 class SlotMap {
 	typedef uint8_t Generation;

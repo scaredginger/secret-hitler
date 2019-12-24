@@ -15,6 +15,23 @@ function encodeKey(key) {
 	return s;
 }
 
+const ClientMessageCode = {
+	NOMINATE_CHANCELLOR: 0,
+	ELIMINATE_POLICY: 1,
+	REVEAL: 2,
+	KILL: 3,
+	SPECIAL_NOMINATION: 4,
+	EXTENDED: 7,
+
+	JA_VOTE: 0 * 8 | 7,
+	NEIN_VOTE: 1 * 8 | 7,
+	ACCEPT_VETO: 2 * 8 | 7,
+	REJECT_VETO: 3 * 8 | 7,
+	SET_NAME: 4 * 8 | 7,
+	READY_UP: 5 * 8 | 7,
+	HOLD_ON: 6 * 8 | 7,
+};
+
 const MessageCode = [
 	'announceElection',
 	'requestPresidentPolicyChoice',
@@ -57,8 +74,8 @@ class Client {
 		this.key = '';
 		this.subscribers = {};
 		this.subscriberPk = 0;
-		this.noFascistPolicies = 0;
-		this.noLiberalPolicies = 0;
+		this.fascistPolicies = 0;
+		this.liberalPolicies = 0;
 		this.ws = null;
 		this.vetoFlag = false;
 	}
@@ -74,18 +91,18 @@ class Client {
 		this.ws.send(msg);
 	}
 
-	extractFlags(arr) {
+	getFlags(arr) {
 		const flags = [];
 		flags[0] = !!((arr[0] >> 6) & 1);
 		flags[1] = !!((arr[0] >> 7) & 1);
-		for (let i = 0; i < noPlayers - 2; i++) {
-			flags[i] = !!(arr[1] & (1 << i));
+		for (let i = 0; i < this.players.length - 2; i++) {
+			flags[i + 2] = !!(arr[1] & (1 << i));
 		}
 		return flags;
 	}
 
 	getOptions(arr) {
-		return this.extractFlags(arr).map((flag, i) => ({
+		return this.getFlags(arr).map((flag, i) => ({
 			name: this.players[i],
 			id: i,
 			eligible: flag,
@@ -109,7 +126,7 @@ class Client {
 			});
 		} else {
 			const president = this.players[this.presidentId];
-			this.publishEvent('presidentChoosing', { president });
+			this.publishEvent('presidentEliminatingPolicy', { president });
 		}
 	}
 
@@ -122,13 +139,13 @@ class Client {
 			const policy1 = (arr[0] >> 5) & 1 ? 'liberal' : 'fascist';
 			const policy2 = (arr[0] >> 6) & 1 ? 'liberal' : 'fascist';
 			const canVeto = !!((arr[0] >> 7) & 1);
-			this.publishEvent('requestPresidentPolicyElimination', {
+			this.publishEvent('requestChancellorPolicyElimination', {
 				policies: [policy1, policy2],
 				canVeto,
 			});
 		} else {
 			const chancellor = this.players[this.chancellorId];
-			this.publishEvent('presidentChoosing', { chancellor });
+			this.publishEvent('chancellorEliminatingPolicy', { chancellor });
 		}
 	}
 
@@ -190,8 +207,11 @@ class Client {
 			player: this.players[i],
 			vote: flag ? 'ja' : 'nein',
 		}));
-		const success = votes.filter(a => a.vote === 'ja').length > players.length / 2;
-		if (!success) {
+		const success = votes.filter(a => a.vote === 'ja').length * 2 > this.players.length;
+		if (success) {
+			this.previousPresidentId = this.presidentId;
+			this.previousChancellorId = this.chancellorId;
+		} else {
 			this.electionTracker++;
 		}
 		this.publishEvent('electionComplete', { votes, success });
@@ -231,12 +251,12 @@ class Client {
 				player: this.players[i],
 				role: flag ? 'liberal' : 'fascist',
 			}));
-			const hitlerOffset = (arr[0] >> 4) & 3;
-			for (let i = 0; i < players.length; i++) {
-				if (players[i].role === 'fascist') {
+			let hitlerOffset = (arr[0] >> 4) & 3;
+			for (let i = 0; i < roles.length; i++) {
+				if (roles[i].role === 'fascist') {
 					hitlerOffset--;
 					if (hitlerOffset < 0) {
-						players[i].role = 'hitler';
+						roles[i].role = 'hitler';
 						break;
 					}
 				}
@@ -254,7 +274,6 @@ class Client {
 
 		this.players[i] = newName;
 		this.publishEvent('rename', { oldName, newName });
-		console.log(this.name, this.players);
 	}
 
 	parse(arr) {
@@ -315,6 +334,7 @@ class Client {
 
 	regularFascistPolicy(arr) {
 		this.electionTracker = 0;
+		this.fascistPolicies++;
 		this.publishEvent('regularFascistPolicy', {});
 	}
 
@@ -322,11 +342,13 @@ class Client {
 		if (this.vetoFlag) {
 			this.veto(true);
 		}
+		this.fascistPolicies++;
 		this.electionTracker = 0;
 		this.publishEvent('chaoticFascistPolicy', {});
 	}
 
 	regularLiberalPolicy(arr) {
+		this.liberalPolicies++;
 		this.electionTracker = 0;
 		this.publishEvent('regularLiberalPolicy', {});
 	}
@@ -335,6 +357,7 @@ class Client {
 		if (this.vetoFlag) {
 			this.veto(true);
 		}
+		this.liberalPolicies++;
 		this.electionTracker = 0;
 		this.publishEvent('chaoticLiberalPolicy', {});
 	}
@@ -344,7 +367,7 @@ class Client {
 			this.veto(true);
 			this.vetoFlag = false;
 		}
-		this.presidentId = arr[1];
+		this.presidentId = arr[1] & 15;
 		const options = this.getOptions(arr.slice(1));
 		if (this.presidentId == this.id) {
 			this.publishEvent('requestChancellorNomination', { options });
@@ -399,6 +422,114 @@ class Client {
 		});
 	}
 
+	// public methods start here
+	vote(v) {
+		const message = new Uint8Array(1);
+		if (v.toLowerCase() === 'ja') {
+			message[0] = ClientMessageCode.JA_VOTE;
+		} else if (v.toLowerCase() === 'nein') {
+			message[0] = ClientMessageCode.NEIN_VOTE;
+		} else {
+			throw new Error('invalid vote: ' + v.toString());
+		}
+		this.ws.send(message);
+	}
+
+	validatePresidentChoice(id) {
+		if (typeof id !== 'number') {
+			throw new Error('player id must be a number');
+		}
+		if (id < 0 || id >= this.players.length) {
+			throw new Error('player id out of range: ' + id);
+		}
+		if (this.presidentId != this.id) {
+			console.log(this.id, this.presidentId);
+			throw new Error('Not allowed to choose player.');
+		}
+	}
+
+	nominateChancellor(id) {
+		this.validatePresidentChoice(id);
+		const message = new Uint8Array(1);
+		message[0] = id << 3 | ClientMessageCode.NOMINATE_CHANCELLOR;
+		this.ws.send(message);
+	}
+	
+	eliminatePolicy(p) {
+		const message = new Uint8Array(1);
+		if (this.id === this.presidentId) {
+			if (p !== 0 && p !== 1 && p !== 2) {
+				throw new Error('invalid policy choice for president: ' + p);
+			}
+			message[0] = p << 3 | ClientMessageCode.ELIMINATE_POLICY;
+		} else if (this.id === this.chancellorId) {
+			if (p === 0) {
+				message[0] = ClientMessageCode.ELIMINATE_POLICY;
+			} else if (p === 1) {
+				message[0] = 8 | ClientMessageCode.ELIMINATE_POLICY;
+			} else if (p === 'veto') {
+				message[0] = 16 | ClientMessageCode.ELIMINATE_POLICY;
+			} else {
+				throw new Error('invalid policy choice for chancellor: ' + p);
+			}
+		} else {
+			throw new Error('not allowed to choose policy');
+		}
+		this.ws.send(message);
+	}
+
+	revealPlayer(id) {
+		this.validatePresidentChoice(id);
+		const message = new Uint8Array(1);
+		message[0] = id << 3 | ClientMessageCode.REVEAL;
+		this.ws.send(message);
+	}
+
+	killPlayer(id) {
+		this.validatePresidentChoice(id);
+		const message = new Uint8Array(1);
+		message[0] = id << 3 | ClientMessageCode.KILL;
+		this.ws.send(message);
+	}
+	
+	specialNomination(id) {
+		this.validatePresidentChoice(id);
+		const message = new Uint8Array(1);
+		message[0] = id << 3 | ClientMessageCode.SPECIAL_NOMINATION;
+		this.ws.send(message);
+	}
+
+	respondToVeto(accept) {
+		if (this.id !== this.presidentId) {
+			throw new Error('Only the presidnet can respond to a veto');
+		}
+		const message = new Uint8Array(1);
+		if (accept) {
+			message[0] = ClientMessageCode.ACCEPT_VETO;
+		} else {
+			message[0] = ClientMessageCode.REJECT_VETO;
+		}
+		this.ws.send(message);
+	}
+
+	ready() {
+		const message = new Uint8Array(1);
+		message[0] = ClientMessageCode.READY_UP;
+		this.ws.send(message);
+	}
+
+	cancelReady() {
+		const message = new Uint8Array(1);
+		message[0] = ClientMessageCode.HOLD_ON;
+		this.ws.send(message);
+	}
+
+	setName(name) {
+		this.name = name;
+		this.players[this.id] = name;
+		this.sendName();
+	}
+
 	create() {
 		return this.connect('ws://localhost:4545/create/');
 	}
@@ -416,18 +547,14 @@ class Client {
 			delete this.subscribers[k];
 		}
 	}
-
-	setName(name) {
-		this.name = name;
-		this.players[this.id] = name;
-		this.sendName();
-	}
 }
 
 function connect(name, key) {
 	const c = new Client();
+	const handlers = makeHandlers(c);
 	c.subscribe((eventName, data) => {
 		console.log(name, eventName, data);
+		handlers[eventName](data);
 	});
 	c.join(key).then(() => {
 		c.setName(name);
@@ -435,18 +562,62 @@ function connect(name, key) {
 	return c;
 }
 
-const handlers = {
-	gameKey({ key }) {
-		const j = connect('jr', key);
-		const l = connect('lj', key);
-		const r = connect('rb', key);
-		const k = connect('kj', key);
-		setTimeout(() => { k.ws.close() }, 1000)
-	},
-};
+function makeHandlers(c) {
+	return {
+		gameKey({ key }) {
+			const j = connect('jr', key);
+			const l = connect('lj', key);
+			const r = connect('rb', key);
+			const k = connect('kj', key);
+			setTimeout(() => {
+				j.ready();
+				l.ready();
+				r.ready();
+				k.ready();
+			}, 1000);
+		},
+		rename() {},
+		playerReady() {},
+		chancellorNomination() {},
+		team() {},
+		requestChancellorNomination({ options }) {
+			const choice = options.reduce((acc, current, i) => current.eligible ? i : acc, 0);
+			c.nominateChancellor(choice);
+		},
+		election() {
+			c.vote('ja');
+		},
+		electionComplete() {},
+		voteCounted() {},
+		presidentEliminatingPolicy() {},
+		chancellorEliminatingPolicy() {},
+		requestPresidentPolicyElimination() { c.eliminatePolicy(0) },
+		requestChancellorPolicyElimination() { c.eliminatePolicy(0) },
+		regularFascistPolicy() {},
+		chaoticFascistPolicy() {},
+		regularLiberalPolicy() {},
+		chaoticLiberalPolicy() {},
+		presidentRevealPolicies() {},
+		revealPolicies() {},
+		kill() {},
+		requestKill({ options }) {
+			const choice = options.reduce((acc, current, i) => current.eligible ? i : acc, 0);
+			c.killPlayer(choice);
+		},
+		fascistHitlerWin() {
+		},
+		liberalHitlerWin() {
+		},
+		fascistPolicyWin() {
+		},
+		liberalPolicyWin() {
+		},
+	};
+}
 
 (function() {
 	const client = new Client();
+	const handlers = makeHandlers(client);
 	client.subscribe((eventName, data) => {
 		console.log('ak', eventName, data);
 		if (handlers[eventName])
@@ -455,4 +626,7 @@ const handlers = {
 	client.create().then(() => {
 		client.setName('ak');
 	});
+	setTimeout(() => {
+		client.ready();
+	}, 1000);
 })();

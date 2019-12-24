@@ -37,6 +37,7 @@ int main() {
 	uWS::App().ws<UserData>("/join/:game", {
 		.open = [&managers](WebSocket *ws, uWS::HttpRequest *req) {
 			auto *data = static_cast<UserData *>(ws->getUserData());
+			new (data) UserData;
 			data->socket = ws;
 			SlotMap::Key key(decodeKey(req->getParameter(0)));
 			auto manager = managers[key];
@@ -57,17 +58,19 @@ int main() {
 			data->manager->handleMessage(data->playerId, message);
 		},
 		.close = [](WebSocket *ws, int code, std::string_view message) {
-		    if (code == 4500) {
-		        return;
-		    }
-			ignoreUnused(message);
-			auto *data = static_cast<UserData *>(ws->getUserData());
+            ignoreUnused(message);
+            auto *data = static_cast<UserData *>(ws->getUserData());
+            data->~UserData();
+            if (code == 4500) {
+                return;
+            }
 			data->manager->onDisconnect(data->playerId, code);
 		}
 	}).ws<UserData>("/create", {
 		.open = [&managers](WebSocket *ws, uWS::HttpRequest *req) {
 			ignoreUnused(req);
 			auto *data = static_cast<UserData *>(ws->getUserData());
+            new (data) UserData;
 			data->socket = ws;
 			SlotMap::Key key = managers.getSlot();
 			auto manager = managers[key];
@@ -90,7 +93,11 @@ int main() {
 		},
 		.close = [](WebSocket *ws, int code, std::string_view message) {
 			ignoreUnused(message);
-			auto *data = static_cast<UserData *>(ws->getUserData());
+            auto *data = static_cast<UserData *>(ws->getUserData());
+            data->~UserData();
+            if (code == 4500) {
+                return;
+            }
 			data->manager->onDisconnect(data->playerId, code);
 		}
 	}).listen(4545, [](auto *listenSocket) {

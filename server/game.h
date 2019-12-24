@@ -106,6 +106,8 @@ private:
 			case TEN:
 				remainingFascists = 3;
 				break;
+		    default:
+		        return;
 		}
 		for (auto i = 0; i < hitler; i++) {
 			if (std::uniform_int_distribution(0, playerCount - i - 1)(rng) < remainingFascists) {
@@ -411,7 +413,7 @@ private:
 	}
 
 	[[nodiscard]] bool chancellorIsValid(int id) {
-		if (!players[id].alive() || previousChancellorId == id || id == presidentId) {
+		if ((!players[id].alive()) || previousChancellorId == id || id == presidentId) {
 			return false;
 		}
 		if (id != previousPresidentId) {
@@ -491,13 +493,14 @@ private:
 
 public:
 	void killPlayer(int id) {
-		if (hitler == id) {
-			return liberalHitlerWin();
-		}
 		if (!players[id].alive()) {
 			return;
 		}
-		players[id].alive(false);
+        players[id].alive(false);
+        comms.announceDeath(id);
+        if (hitler == id) {
+            return liberalHitlerWin();
+        }
 		moveToNextPresident();
 	}
 
@@ -650,7 +653,7 @@ public:
 	std::bitset<10> getTeams() {
 		std::bitset<10> result(0);
 		for (auto i = 0; i < playerCount; i++) {
-			result[i] = players[i].team();
+			result[i] = players[i].team() == LIBERAL;
 		}
 		return result;
 	}

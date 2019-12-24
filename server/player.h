@@ -1,7 +1,3 @@
-//
-// Created by ak on 12/12/19.
-//
-
 #ifndef SERVER_PLAYER_H
 #define SERVER_PLAYER_H
 

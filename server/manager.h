@@ -270,7 +270,7 @@ private:
 		int fasc = -1;
 
 		int hitlerNumber = (teams.count() - (teams >> hitler).count() - 1) & 3;
-		ptr[1] = TEAM | (hitlerNumber << 4) | ((teamFlags) & 3 << 6);
+		ptr[1] = TEAM | (hitlerNumber << 4) | ((teamFlags & 3) << 6);
 		ptr[2] = (teamFlags >> 2) & 255;
 
 		for (auto i = 0; i < hitler; i++) {
@@ -336,17 +336,24 @@ private:
 	void successfulElection() {
 		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
 		auto ballot = game.getBallot().to_ulong();
-		ptr[0] = BALLOT | 16 | ((ballot & 3) << 5);
-		ptr[1] = (BALLOT >> 2) & 255;
+		ptr[0] = BALLOT | 16 | ((ballot & 3) << 6);
+		ptr[1] = (ballot >> 2) & 255;
 		std::string_view message(sendBuffer, 2);
 		broadcast(message);
+	}
+
+	void announceDeath(int id) {
+        auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+        ptr[0] = DEATH | ((id & 15) << 4);
+        std::string_view message(sendBuffer, 1);
+        broadcast(message);
 	}
 
 	void failedElection() {
 		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
 		auto ballot = game.getBallot().to_ulong();
-		ptr[0] = BALLOT | ((ballot & 3) << 5);
-		ptr[1] = (BALLOT >> 2) & 255;
+		ptr[0] = BALLOT | ((ballot & 3) << 6);
+		ptr[1] = (ballot >> 2) & 255;
 		std::string_view message(sendBuffer, 2);
 		broadcast(message);
 	}
@@ -397,8 +404,12 @@ private:
 	void eliminatePolicy(int id, int choice) {
 		if (game.getState() == game.AWAITING_PRESIDENT_POLICY && id == game.getPresidentId()) {
 			game.removePresidentPolicy(static_cast<typename Game<Manager>::PolicyChoice>(choice));
-		} else if (game.getState() == game.AWAITING_CHANCELLOR_POLICY && id == game.getChancellorId()) {
-			game.removeChancellorPolicy(static_cast<typename Game<Manager>::PolicyChoice>(choice));
+        } else if (game.getState() == game.AWAITING_CHANCELLOR_POLICY && id == game.getChancellorId()) {
+            game.removeChancellorPolicy(static_cast<typename Game<Manager>::PolicyChoice>(choice));
+		} else if (game.getState() == game.AWAITING_CHANCELLOR_POLICY_NO_VETO && id == game.getChancellorId()) {
+		    if (choice != game.VETO) {
+                game.removeChancellorPolicy(static_cast<typename Game<Manager>::PolicyChoice>(choice));
+		    }
 		} else {
 			return;
 		}
@@ -443,8 +454,8 @@ private:
 	void castVote(int id, Vote vote) {
 		if (clients[id].voted()) return;
 		clients[id].voted(true);
+        announceVoteReceived(id);
 		game.addVote(id, vote);
-		announceVoteReceived(id);
 	}
 
 	void respondToVeto(int id, bool accept) {
@@ -500,6 +511,7 @@ public:
 		NOT_READY,
 		TEAM,
 		NAME,
+		DEATH,
 		EXTENDED
 	};
 
@@ -674,7 +686,7 @@ public:
 		auto alive = game.alive().to_ulong();
 		ptr[0] = REQUEST_KILL | ((alive & 3) << 6);
 		ptr[1] = (alive >> 2) & 255;
-		std::string_view message(sendBuffer, 1);
+		std::string_view message(sendBuffer, 2);
 		broadcast(message);
 	}
 

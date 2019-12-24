@@ -83,7 +83,7 @@ public:
 	void safeSend(std::string_view view) {
 		auto s = getSocket();
 		if (s) {
-			s->send(view, uWS::OpCode::BINARY, true);
+			send(view);
 		}
 	}
 
@@ -93,7 +93,9 @@ public:
 	}
 
 	void send(std::string_view view) {
-		getSocket()->send(view, uWS::OpCode::BINARY, true);
+		if (!getSocket()->send(view, uWS::OpCode::BINARY, true)) {
+		    std::cout << "bad send\n";
+		}
 	}
 
 	void send(char *buf, int i) {
@@ -149,6 +151,10 @@ public:
 			return -1;
 		}
         auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+        int i;
+        for (i = 0; i < 10 && clients[i].connected(); i++) {}
+        ptr[0] = i;
+        ws->send(std::string_view(sendBuffer, 1));
         for (int j = 0; j < 10; j++) {
             auto &c = clients[j];
             if (c.connected()) {
@@ -157,8 +163,6 @@ public:
                 ws->send(std::string_view(sendBuffer, c.getName().length() + 1));
             }
         }
-		int i;
-		for (i = 0; i < 10 && clients[i].connected(); i++) {}
 		clientCount++;
 		clients[i] = Client(ws);
 		return i;
@@ -331,6 +335,10 @@ private:
 		    auto &k = clients[i];
 		    k.safeSend(message);
 		}
+        for (auto i = id + 1; i < 10; i++) {
+            auto &k = clients[i];
+            k.safeSend(message);
+        }
 	}
 
 	void setName(int id, std::string_view name) {
@@ -487,7 +495,6 @@ public:
 	};
 
 	void announceElection() {
-		auto president = game.getPresidentId();
 		auto chancellor = game.getPresidentId();
 		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
 		ptr[0] = ANNOUNCE_ELECTION | (chancellor << 4);

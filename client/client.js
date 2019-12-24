@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 
-function encode(key) {
+function encodeKey(key) {
 	const chars = Math.ceil(Math.log2(1 + 15/16 * (key + 1)) / 4);
 	const residue = key - 16 * (Math.pow(16, chars - 1) - 1) / 15;
 	let t = residue;
@@ -29,7 +29,7 @@ const MessageCode = [
 	'readyToStart',
 	'notReady',
 	'team',
-	'name',
+	'changeName',
 	'extended',
 ];
 
@@ -60,6 +60,7 @@ class Client {
 		this.noFascistPolicies = 0;
 		this.noLiberalPolicies = 0;
 		this.ws = null;
+		this.vetoFlag = false;
 	}
 
 	sendName() {
@@ -75,8 +76,8 @@ class Client {
 
 	extractFlags(arr) {
 		const flags = [];
-		flags[0] = !!((arr[0] >> 6) & 1),
-		flags[1] = !!((arr[0] >> 7) & 1),
+		flags[0] = !!((arr[0] >> 6) & 1);
+		flags[1] = !!((arr[0] >> 7) & 1);
 		for (let i = 0; i < noPlayers - 2; i++) {
 			flags[i] = !!(arr[1] & (1 << i));
 		}
@@ -88,7 +89,7 @@ class Client {
 			name: this.players[i],
 			id: i,
 			eligible: flag,
-		});
+		}));
 	}
 
 	announceElection(arr) {
@@ -113,6 +114,10 @@ class Client {
 	}
 
 	requestChancellorPolicyChoice(arr) {
+		if (this.vetoFlag) {
+			this.veto(false);
+			this.vetoFlag = false;
+		}
 		if (this.id == this.chancellorId) {
 			const policy1 = (arr[0] >> 5) & 1 ? 'liberal' : 'fascist';
 			const policy2 = (arr[0] >> 6) & 1 ? 'liberal' : 'fascist';
@@ -186,12 +191,16 @@ class Client {
 			vote: flag ? 'ja' : 'nein',
 		}));
 		const success = votes.filter(a => a.vote === 'ja').length > players.length / 2;
+		if (!success) {
+			this.electionTracker++;
+		}
 		this.publishEvent('electionComplete', { votes, success });
 	}
 
 	disconnect(arr) {
 		const playerId = arr[0] >> 4;
 		const player = this.players[playerId];
+		this.players[playerId] = undefined;
 		this.publishEvent('disconnect', { player });
 	}
 
@@ -236,7 +245,7 @@ class Client {
 		}
 	}
 
-	name(arr) {
+	changeName(arr) {
 		const i = arr[0] >> 4;
 		const oldName = this.players[i];
 		const text = arr.slice(1);
@@ -244,69 +253,132 @@ class Client {
 		const newName = decoder.decode(text);
 
 		this.players[i] = newName;
-		this.publishEvent('rename', oldName, newName);
+		this.publishEvent('rename', { oldName, newName });
+		console.log(this.name, this.players);
 	}
 
 	parse(arr) {
-		name = MessageCode[arr[0] & 15];
-		this[name](arr);
+		const methodName = MessageCode[arr[0] & 15];
+		this[methodName](arr);
 	}
 
 	extended(arr) {
-		name = ExtendedMessageCode[arr[0] >> 4];
-		this[name](arr);
+		const methodName = ExtendedMessageCode[arr[0] >> 4];
+		this[methodName](arr);
 	}
 
 	requestPresidentVeto(arr) {
+		if (this.presidentId === this.id) {
+			return this.publishEvent('requestVeto', {});
+		}
+		const president = this.players[this.presidentId];
+		this.vetoFlag = true;
+		this.publishEvent('presidentRequestVeto', { president });
 	}
 
 	liberalPolicyWin(arr) {
+		this.publishEvent('liberalPolicyWin', {});
 	}
 
 	liberalHitlerWin(arr) {
+		this.publishEvent('liberalHitlerWin', {});
 	}
 
 	fascistPolicyWin(arr) {
+		this.publishEvent('fascistPolicyWin', {});
 	}
 
 	fascistHitlerWin(arr) {
+		this.publishEvent('fascistHitlerWin', {});
 	}
 
 	requestSpecialNomination(arr) {
+		const options = this.players.map((player, id) => ({
+			player,
+			id,
+			eligible: true,
+		}));
+		options[this.presidentId].eligible = false;
+		if (this.presidentId === this.id) {
+			this.publishEvent('presidentSpecialNomination', { options });
+		} else {
+			this.publishEvent('specialNomination', { options });
+		}
 	}
 
 	reassign(arr) {
+		const oldId = arr[1] & 15;
+		const newId = arr[1] >> 4;
+		this.players[newId] = this.players[oldId];
+		this.players[oldId] = null;
 	}
 
 	regularFascistPolicy(arr) {
+		this.electionTracker = 0;
+		this.publishEvent('regularFascistPolicy', {});
 	}
 
 	chaoticFascistPolicy(arr) {
+		if (this.vetoFlag) {
+			this.veto(true);
+		}
+		this.electionTracker = 0;
+		this.publishEvent('chaoticFascistPolicy', {});
 	}
 
 	regularLiberalPolicy(arr) {
+		this.electionTracker = 0;
+		this.publishEvent('regularLiberalPolicy', {});
 	}
 
 	chaoticLiberalPolicy(arr) {
+		if (this.vetoFlag) {
+			this.veto(true);
+		}
+		this.electionTracker = 0;
+		this.publishEvent('chaoticLiberalPolicy', {});
 	}
 
 	requestChancellorNomination(arr) {
+		if (this.vetoFlag) {
+			this.veto(true);
+			this.vetoFlag = false;
+		}
 		this.presidentId = arr[1];
 		const options = this.getOptions(arr.slice(1));
 		if (this.presidentId == this.id) {
-			this.sendEvent('requestChancellorNomination', options);
+			this.publishEvent('requestChancellorNomination', { options });
 		} else {
-			this.sendEvent('chancellorNomination', options);
+			this.publishEvent('chancellorNomination', { options });
 		}
 	}
 
 	gameKey(arr) {
+		const intKey = (arr[1] << 24) | (arr[2] << 16) | (arr[3] << 8) | arr[4];
+		this.key = encodeKey(intKey);
+		this.publishEvent('gameKey', { key: this.key });
+	}
+
+	veto(accepted) {
+		const president = this.players[this.presidentId];
+		const chancellor = this.players[this.chancellorId];
+		if (accepted) {
+			this.electionTracker++;
+			this.publishEvent('successfulVeto', { president, chancellor });
+		} else {
+			this.publishEvent('failedVeto', { president, chancellor });
+		}
 	}
 
 	publishEvent(name, data) {
 		for (const key in this.subscribers) {
 			this.subscribers[key](name, data);
 		}
+	}
+
+	onmessage(e) {
+		const arr = new Uint8Array(e.data);
+		this.parse(arr);
 	}
 
 	connect(url) {
@@ -316,10 +388,11 @@ class Client {
 				this.ws.on('open', (e) => {
 					resolve(this);
 				});
-				this.ws.on('message', e => {
-					const arr = new Uint8Array(e);
-					this.parse(arr);
-				});
+				this.ws.onmessage = (e) => {
+					const arr = new Uint8Array(e.data);
+					this.id = arr[0];
+					this.ws.onmessage = this.onmessage.bind(this);
+				};
 			} catch (e) {
 				reject(e);
 			}
@@ -346,6 +419,7 @@ class Client {
 
 	setName(name) {
 		this.name = name;
+		this.players[this.id] = name;
 		this.sendName();
 	}
 }
@@ -353,27 +427,30 @@ class Client {
 function connect(name, key) {
 	const c = new Client();
 	c.subscribe((eventName, data) => {
-		console.log(eventName, data);
+		console.log(name, eventName, data);
 	});
 	c.join(key).then(() => {
 		c.setName(name);
 	});
+	return c;
 }
 
 const handlers = {
 	gameKey({ key }) {
-		connect('jr', key);
-		connect('lj', key);
-		connect('rb', key);
-		connect('kj', key);
+		const j = connect('jr', key);
+		const l = connect('lj', key);
+		const r = connect('rb', key);
+		const k = connect('kj', key);
+		setTimeout(() => { k.ws.close() }, 1000)
 	},
 };
 
 (function() {
 	const client = new Client();
 	client.subscribe((eventName, data) => {
-		console.log(eventName, data);
-		handlers[eventName](data);
+		console.log('ak', eventName, data);
+		if (handlers[eventName])
+			handlers[eventName](data);
 	});
 	client.create().then(() => {
 		client.setName('ak');

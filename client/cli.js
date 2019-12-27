@@ -9,7 +9,10 @@ let online = null;
 process.stdin.on('readable', () => {
 	// Use a loop to make sure we read all available data.
 	while ((chunk = process.stdin.read()) !== null) {
-		const i = chunk.indexOf('\n');
+		let i = chunk.indexOf('\r\n');
+		if (i < 0) {
+			i = chunk.indexOf('\n');
+		}
 		if (online && i >= 0) {
 			const a = chunk.substr(0, i);
 			stdinBuffer = chunk.substr(i + 1);
@@ -26,7 +29,7 @@ process.stdin.on('end', () => {
 
 function getline() {
 	return new Promise((resolve, reject) => {
-		const i = stdinBuffer.indexOf('\n');
+		const i = stdinBuffer.indexOf('\r\n');
 		if (i >= 0) {
 			const a = stdinBuffer.substr(0, i);
 			stdinBuffer = stdinBuffer.substr(i + 1);
@@ -365,7 +368,7 @@ function init(client) {
 				}
 				return client.join(str[1]);
 			case 'create':
-				if (str.length > 1) {
+				if (str.length > 1 && !str.slice(1).reduce((a, b) => a && b == '', true)) {
 					console.log('You gave an extraneous argument. Did you mean to join a game?');
 					return init();
 				}
@@ -413,5 +416,6 @@ async function getName(client) {
 	await init(client)
 	const name = await getName(client);
 	client.setName(name);
+	console.log('Waiting for others to join...');
 	client.ready();
 })();

@@ -1,5 +1,8 @@
 const Client = require('./client');
 
+const domain = 'localhost';
+const port = '4545';
+
 process.stdin.setEncoding('utf8');
 let stdinBuffer = '';
 let online = null;
@@ -33,7 +36,7 @@ function getline() {
 	});
 }
 
-async function getChancellorNomination(client, options) {
+async function getChancellorNomination(options) {
 	console.log('Nominate your chancellor.');
 	for (const o of options) {
 		if (o.eligible) {
@@ -44,13 +47,13 @@ async function getChancellorNomination(client, options) {
 	const l = await getline();
 	const n = parseInt(l);
 
-	if (!(0 <= n && n < client.players.length)) {
+	if (!(0 <= n && n < options.length)) {
 		console.log('Invalid choice. Please enter a number.');
-		return getChancellorNomination(client, options);
+		return getChancellorNomination(options);
 	}
 	if (!options[n] || !options[n].eligible) {
 		console.log('Invalid choice.');
-		return getChancellorNomination(client, options);
+		return getChancellorNomination(options);
 	}
 	return n;
 }
@@ -68,7 +71,7 @@ async function getVote(president, chancellor) {
 	return l;
 }
 
-async function getVictim(client, options) {
+async function getVictim(options) {
 	console.log('Pick somebody to kill:');
 	for (const o of options) {
 		if (o.eligible) {
@@ -79,9 +82,13 @@ async function getVictim(client, options) {
 	const l = await getline();
 	const n = parseInt(l);
 
-	if (!(0 <= n && n < client.players.length)) {
+	if (!(0 <= n && n < options.length)) {
 		console.log('Invalid choice. Please enter a number.');
-		return getChancellorNomination(client, options);
+		return getVictim(options);
+	}
+	if (!options[n].eligible) {
+		console.log('Invalid choice.');
+		return getVictim(options);
 	}
 	return n;
 }
@@ -131,6 +138,50 @@ async function getVeto(chancellor) {
 	return l === 'ja';
 }
 
+async function getInvestigation(options) {
+	console.log('Pick somebody to investigate:');
+	for (const o of options) {
+		if (o.eligible) {
+			console.log(`${o.id}) ${o.player}`);
+		}
+	}
+	process.stdout.write('player> ');
+	const l = await getline();
+	const n = parseInt(l);
+
+	if (!(0 <= n && n < options.length)) {
+		console.log('Invalid choice. Please enter a number.');
+		return getInvestigation(options);
+	}
+	if (!options[n].eligible) {
+		console.log('Invalid choice.');
+		return getInvestigation(options);
+	}
+	return n;
+}
+
+async function getSpecialNomination(options) {
+	console.log('Choose the next president:');
+	for (const o of options) {
+		if (o.eligible) {
+			console.log(`${o.id}) ${o.player}`);
+		}
+	}
+	process.stdout.write('player> ');
+	const l = await getline();
+	const n = parseInt(l);
+
+	if (!(0 <= n && n < options.length)) {
+		console.log('Invalid choice. Please enter a number.');
+		return getSpecialNomination(options);
+	}
+	if (!options[n].eligible) {
+		console.log('Invalid choice.');
+		return getSpecialNomination(options);
+	}
+	return n;
+}
+
 const createHandlers = (client) => ({
 	async gameKey({ key }) {
 		console.log('Game key:', key);
@@ -156,7 +207,8 @@ const createHandlers = (client) => ({
 		}
 	},
 	async requestChancellorNomination({ options }) {
-		getChancellorNomination(client, options).then(choice => client.nominateChancellor(choice));
+		const choice = await getChancellorNomination(options);
+		client.nominateChancellor(choice);
 	},
 	async election({ president, chancellor }) {
 		const vote = await getVote(president, chancellor);
@@ -230,7 +282,7 @@ const createHandlers = (client) => ({
 		}
 	},
 	async requestKill({ options }) {
-		const victim = await getVictim(client, options);
+		const victim = await getVictim(options);
 		client.killPlayer(victim);
 	},
 	async death({ player }) {
@@ -265,6 +317,39 @@ const createHandlers = (client) => ({
 	async liberalPolicyWin() {
 		console.log('Five liberal policies were passed. Liberals win!');
 		client.ws.close();
+	},
+	async requestInvestigation({ options }) {
+		const choice = await getInvestigation(options);
+		client.revealPlayer(choice);
+	},
+	async investigation({ president, options }) {
+		console.log(president, 'can reveal a player\'s team:');
+		for (const o of options) {
+			if (o.eligible) {
+				console.log(`* ${o.player}`);
+			}
+		}
+	},
+	async revealTeam({ player, team }) {
+		console.log(`${player} is a ${team}.`);
+	},
+	async presidentRevealTeam({ player, president }) {
+		console.log(president, 'knows the party of', player + '.');
+	},
+	async requestSpecialNomination({ options }) {
+		const choice = await getSpecialNomination(options);
+		client.specialNomination(choice);
+	},
+	async specialNomination({ president, options }) {
+		console.log(president, 'must choose the next president:');
+		for (const o of options) {
+			if (o.eligible) {
+				console.log(`* ${o.player}`);
+			}
+		}
+	},
+	async disconnect({ player }) {
+		console.log(player, 'has disconnected. You will not be able to finish this game.');
 	},
 });
 
@@ -316,7 +401,7 @@ async function getName(client) {
 }
 
 (async function() {
-	const client = new Client();
+	const client = new Client(domain, port);
 	const handlers = createHandlers(client);
 	client.subscribe((eventName, data) => {
 		if (handlers[eventName])

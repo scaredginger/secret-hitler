@@ -68,7 +68,7 @@ const ExtendedMessageCode = [
 ];
 
 class Client {
-	constructor() {
+	constructor(domain='localhost', port=4545) {
 		this.players = [];
 		this.id = -1;
 		this.name = '';
@@ -80,6 +80,8 @@ class Client {
 		this.electionTracker = 0;
 		this.ws = null;
 		this.vetoFlag = false;
+		this.domain = domain;
+		this.port = port;
 	}
 
 	sendName() {
@@ -162,7 +164,6 @@ class Client {
 	}
 
 	requestKill(arr) {
-		console.log('kill', arr);
 		const options = this.getOptions(arr);
 		if (this.id == this.presidentId) {
 			this.publishEvent('requestKill', { options });
@@ -253,7 +254,6 @@ class Client {
 				return this.publishEvent('team', { role: 'hitler', roles });
 			}
 		} else {
-			console.log(arr);
 			const roles = this.getFlags(arr).map((flag, i) => ({
 				player: this.players[i],
 				role: flag ? 'liberal' : 'fascist',
@@ -338,10 +338,11 @@ class Client {
 			eligible: true,
 		}));
 		options[this.presidentId].eligible = false;
+		const president = this.players[this.presidentId];
 		if (this.presidentId === this.id) {
-			this.publishEvent('presidentSpecialNomination', { options });
+			this.publishEvent('requestSpecialNomination', { options });
 		} else {
-			this.publishEvent('specialNomination', { options });
+			this.publishEvent('specialNomination', { president, options });
 		}
 	}
 
@@ -463,9 +464,8 @@ class Client {
 		if (id < 0 || id >= this.players.length) {
 			throw new Error('player id out of range: ' + id);
 		}
-		if (this.presidentId != this.id) {
-			console.log(this.id, this.presidentId);
-			throw new Error('Not allowed to choose player.');
+		if (this.presidentId !== this.id) {
+			throw new Error('You are not the president.');
 		}
 	}
 
@@ -546,7 +546,7 @@ class Client {
 	}
 
 	setName(name) {
-		for (const p of players) {
+		for (const p of this.players) {
 			if (name === p) {
 				throw new Error('Another player took that name.');
 			}
@@ -557,13 +557,13 @@ class Client {
 	}
 
 	create() {
-		return this.connect('ws://localhost:4545/create/');
+		return this.connect(`ws://${this.domain}:${this.port}/create/`);
 	}
 
 	join(key) {
 		key = key.toLowerCase();
 		this.key = key;
-		return this.connect('ws://localhost:4545/join/' + key);
+		return this.connect(`ws://${this.domain}:${this.port}/join/${key}`);
 	}
 
 	subscribe(f) {

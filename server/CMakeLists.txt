@@ -41,6 +41,7 @@ add_custom_command(OUTPUT ${USOCKETS} COMMAND make WORKING_DIRECTORY ${USOCKETS_
 add_executable(server main.cpp game.h player.h manager.h common.h ${USOCKETS} slotMap.h)
 target_compile_options(server PUBLIC -Wall -Wextra -Werror -Wno-missing-field-initializers)
 target_link_libraries(server crypto ssl fmt ${USOCKETS} z)
+set_target_properties(server PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 add_executable(test test/gameTests.cpp)
 target_link_libraries(test gtest_main fmt)

@@ -100,7 +100,7 @@ int main() {
             }
 			data->manager->onDisconnect(data->playerId, code);
 		}
-	}).listen(4545, [](auto *listenSocket) {
+	}).listen("0.0.0.0", 4545, [](auto *listenSocket) {
         if (listenSocket) {
             std::cout << "Listening for connections..." << std::endl;
         }

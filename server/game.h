@@ -29,7 +29,7 @@
  * Therefore, if we shift down and have no set bits, we must reshuffle.
  */
 template <typename CommunicationManager>
-class Game {
+class GenericGame {
 public:
 	enum State {
 		NOT_STARTED = 0,
@@ -76,7 +76,6 @@ private:
 	int chancellorId = -1;
 
 	int electionTracker = 0;
-	bool specialElection = false;
 
 	int previousPresidentId = -1;
 	int previousChancellorId = -1;
@@ -106,8 +105,8 @@ private:
 			case TEN:
 				remainingFascists = 3;
 				break;
-		    default:
-		        return;
+			default:
+				return;
 		}
 		for (auto i = 0; i < hitler; i++) {
 			if (std::uniform_int_distribution(0, playerCount - i - 1)(rng) < remainingFascists) {
@@ -128,7 +127,7 @@ private:
 	}
 
 public:
-	explicit Game(CommunicationManager &comms) : comms(comms) {
+	explicit GenericGame(CommunicationManager &comms) : comms(comms) {
 	}
 
 	void init(unsigned long long seed) {
@@ -140,7 +139,7 @@ public:
 		presidentCounter = presidentId;
 		assignRoles();
 		for (auto i = 0; i < playerCount; i++) {
-            players[i].alive(true);
+			players[i].alive(true);
 		}
 	}
 
@@ -399,14 +398,9 @@ private:
 	}
 
 	void moveToNextPresident() {
-		if (specialElection) {
-			specialElection = false;
-		} else {
+		do {
 			presidentCounter = (presidentCounter + 1) % playerCount;
-		}
-		while (!players[presidentCounter].alive()) {
-			presidentCounter = (presidentCounter + 1) % playerCount;
-		}
+		} while (!players[presidentCounter].alive());
 		presidentId = presidentCounter;
 		state = AWAITING_CHANCELLOR_NOMINATION;
 		comms.requestChancellorNomination();
@@ -479,7 +473,6 @@ public:
 		if (id == presidentId || !players[id].alive()) {
 			return;
 		}
-		specialElection = true;
 		presidentId = id;
 		state = AWAITING_CHANCELLOR_NOMINATION;
 		comms.requestChancellorNomination();
@@ -496,11 +489,11 @@ public:
 		if (!players[id].alive()) {
 			return;
 		}
-        players[id].alive(false);
-        comms.announceDeath(id);
-        if (hitler == id) {
-            return liberalHitlerWin();
-        }
+		players[id].alive(false);
+		comms.announceDeath(id);
+		if (hitler == id) {
+			return liberalHitlerWin();
+		}
 		moveToNextPresident();
 	}
 

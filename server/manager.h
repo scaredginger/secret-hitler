@@ -156,7 +156,9 @@ public:
 
 class Manager {
 private:
-	Game<Manager> game;
+	using Game = GenericGame<Manager>;
+
+	Game game;
 	std::array<Client, 10> clients;
 	std::function<void()> deleter;
 	int clientCount = 0;
@@ -198,13 +200,13 @@ public:
 		if (code >= 4000) return;
 		clients[id].onDisconnect();
 		switch(game.getState()) {
-			case game.NOT_STARTED:
+			case Game::NOT_STARTED:
 				announceDisconnect(id);
 				break;
-			case game.LIBERAL_POLICY_WIN:
-			case game.LIBERAL_HITLER_WIN:
-			case game.FASCIST_POLICY_WIN:
-			case game.FASCIST_HITLER_WIN:
+			case Game::LIBERAL_POLICY_WIN:
+			case Game::LIBERAL_HITLER_WIN:
+			case Game::FASCIST_POLICY_WIN:
+			case Game::FASCIST_HITLER_WIN:
 				break;
 			default:
 				announceDisconnect(id);
@@ -248,17 +250,14 @@ private:
 
 	void startGame() {
 		removeNulls();
+        for (auto &c : clients) {
+            c.voted(false);
+        }
 		game.init();
-		for (auto &c : clients) {
-			c.voted(false);
-		}
 		sendTeams();
 		game.start();
 	}
 
-	// TODO: try to get this down to 2 bytes for fascists
-	// Idea: no need to say team, base it on message length
-	// Idea: 4 bits for message, 2 bits for hitler (fascist number), 10 bits for all players
 	void sendTeams() {
 		std::string_view libMessage(sendBuffer, 1);
 		std::string_view fascMessage(sendBuffer + 1, 2);
@@ -269,12 +268,14 @@ private:
 		ptr[0] = TEAM;
 		int fasc = -1;
 
-		int hitlerNumber = (teams.count() - (teams >> hitler).count() - 1) & 3;
+		std::bitset<10> mask(0x3ff);
+		teams.flip();
+		unsigned hitlerNumber = (teams.count() - (teams >> hitler).count()) & 3;
 		ptr[1] = TEAM | (hitlerNumber << 4) | ((teamFlags & 3) << 6);
 		ptr[2] = (teamFlags >> 2) & 255;
 
 		for (auto i = 0; i < hitler; i++) {
-			if (teams[i] == FASCIST) {
+			if (teams[i]) {
 				clients[i].send(fascMessage);
 				fasc = i;
 			} else {
@@ -282,7 +283,7 @@ private:
 			}
 		}
 		for (auto i = hitler + 1; i < clientCount; i++) {
-			if (teams[i] == FASCIST) {
+			if (teams[i]) {
 				clients[i].send(fascMessage);
 				fasc = i;
 			} else {
@@ -403,12 +404,12 @@ private:
 
 	void eliminatePolicy(int id, int choice) {
 		if (game.getState() == game.AWAITING_PRESIDENT_POLICY && id == game.getPresidentId()) {
-			game.removePresidentPolicy(static_cast<typename Game<Manager>::PolicyChoice>(choice));
+			game.removePresidentPolicy(static_cast<typename Game::PolicyChoice>(choice));
         } else if (game.getState() == game.AWAITING_CHANCELLOR_POLICY && id == game.getChancellorId()) {
-            game.removeChancellorPolicy(static_cast<typename Game<Manager>::PolicyChoice>(choice));
+            game.removeChancellorPolicy(static_cast<typename Game::PolicyChoice>(choice));
 		} else if (game.getState() == game.AWAITING_CHANCELLOR_POLICY_NO_VETO && id == game.getChancellorId()) {
 		    if (choice != game.VETO) {
-                game.removeChancellorPolicy(static_cast<typename Game<Manager>::PolicyChoice>(choice));
+                game.removeChancellorPolicy(static_cast<typename Game::PolicyChoice>(choice));
 		    }
 		} else {
 			return;

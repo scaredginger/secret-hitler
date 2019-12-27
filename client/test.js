@@ -20,11 +20,19 @@ function makeHandlers(c) {
 			const l = connect('lj', key);
 			const r = connect('rb', key);
 			const k = connect('kj', key);
+			const s = connect('sh', key);
+			const p = connect('pd', key);
+			const i = connect('it', key);
+			const t = connect('tm', key);
 			setTimeout(() => {
 				j.ready();
 				l.ready();
 				r.ready();
 				k.ready();
+				s.ready();
+				p.ready();
+				i.ready();
+				t.ready();
 			}, 1000);
 		},
 		rename() {},

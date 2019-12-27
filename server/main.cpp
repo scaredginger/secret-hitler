@@ -35,6 +35,7 @@ int main() {
 		// .cert_file_name = cert_file_name
 	// }).ws<UserData>("/joinGame/:game", {
 	uWS::App().ws<UserData>("/join/:game", {
+        .idleTimeout = 60 * 60,
 		.open = [&managers](WebSocket *ws, uWS::HttpRequest *req) {
 			auto *data = static_cast<UserData *>(ws->getUserData());
 			new (data) UserData;
@@ -67,6 +68,7 @@ int main() {
 			data->manager->onDisconnect(data->playerId, code);
 		}
 	}).ws<UserData>("/create", {
+        .idleTimeout = 60 * 60,
 		.open = [&managers](WebSocket *ws, uWS::HttpRequest *req) {
 			ignoreUnused(req);
 			auto *data = static_cast<UserData *>(ws->getUserData());

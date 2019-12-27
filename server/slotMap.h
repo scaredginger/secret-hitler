@@ -50,8 +50,8 @@ private:
 		key.g++;
 		freeSlots[key.M].push_back(key);
 
-        auto &outer = managers[key.M];
-        std::get<1>(outer[key.m])++;
+		auto &outer = managers[key.M];
+		std::get<1>(outer[key.m])++;
 	}
 
 public:

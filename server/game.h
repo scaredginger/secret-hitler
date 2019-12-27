@@ -19,10 +19,10 @@
  *
  * The class is a finite state machine, with transitions caused by calling public methods
  * The pattern is that the CommunicationManager will call a public method, and
- * 		the class will transition, then run a callback method on the communication comms
+ *         the class will transition, then run a callback method on the communication comms
  * If the arguments given to a method are invalid, a transition won't occur
  * Otherwise, this class trusts its input. It doesn't check if it's in the correct state, nothing is bounds checked,
- * 		and it doesn't check if inputs come from the correct players. This should be done by the CommunicationManager
+ *         and it doesn't check if inputs come from the correct players. This should be done by the CommunicationManager
  *
  * The deck is a bitset. Cards are accessed by bitshifting.
  * The end of the deck is marked with a set bit, and all bits above it are zero.

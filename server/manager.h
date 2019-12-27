@@ -11,9 +11,9 @@
 using WebSocket = uWS::WebSocket<false, true>;
 
 struct Message {
-    int length;
-    char data[256];
-    Message() = default;
+	int length;
+	char data[256];
+	Message() = default;
 };
 
 class Manager;
@@ -100,28 +100,28 @@ public:
 	}
 
 	void send(std::string_view view) {
-	    auto *s = getSocket();
-	    auto data = reinterpret_cast<UserData *>(s->getUserData());
-	    auto &q = data->queue;
-	    while (!q.empty()) {
-	        if (s->send(std::string_view(q.front().data, q.front().length))) {
-                q.pop_front();
-	        } else {
-	            break;
-	        }
-	    }
-	    if (q.empty()) {
-            if (s->send(view, uWS::OpCode::BINARY, true)) {
-            } else {
-                q.emplace_back();
-                auto &x = q.back();
-                x.length = view.copy(x.data, 256);
-            }
-        } else {
-	        q.emplace_back();
-            auto &x = q.back();
-	        x.length = view.copy(x.data, 256);
-	    }
+		auto *s = getSocket();
+		auto data = reinterpret_cast<UserData *>(s->getUserData());
+		auto &q = data->queue;
+		while (!q.empty()) {
+			if (s->send(std::string_view(q.front().data, q.front().length))) {
+				q.pop_front();
+			} else {
+				break;
+			}
+		}
+		if (q.empty()) {
+			if (s->send(view, uWS::OpCode::BINARY, true)) {
+			} else {
+				q.emplace_back();
+				auto &x = q.back();
+				x.length = view.copy(x.data, 256);
+			}
+		} else {
+			q.emplace_back();
+			auto &x = q.back();
+			x.length = view.copy(x.data, 256);
+		}
 	}
 
 	void send(char *buf, int i) {
@@ -178,19 +178,19 @@ public:
 		if (clientCount >= 10) {
 			return -1;
 		}
-        auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
-        int i;
-        for (i = 0; i < 10 && clients[i].connected(); i++) {}
-        ptr[0] = i;
-        ws->send(std::string_view(sendBuffer, 1));
-        for (int j = 0; j < 10; j++) {
-            auto &c = clients[j];
-            if (c.connected()) {
-                ptr[0] = (j << 4) | NAME;
-                c.getName().copy(sendBuffer + 1, sizeof(sendBuffer) - 1);
-                ws->send(std::string_view(sendBuffer, c.getName().length() + 1));
-            }
-        }
+		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+		int i;
+		for (i = 0; i < 10 && clients[i].connected(); i++) {}
+		ptr[0] = i;
+		ws->send(std::string_view(sendBuffer, 1));
+		for (int j = 0; j < 10; j++) {
+			auto &c = clients[j];
+			if (c.connected()) {
+				ptr[0] = (j << 4) | NAME;
+				c.getName().copy(sendBuffer + 1, sizeof(sendBuffer) - 1);
+				ws->send(std::string_view(sendBuffer, c.getName().length() + 1));
+			}
+		}
 		clientCount++;
 		clients[i] = Client(ws);
 		return i;
@@ -250,9 +250,9 @@ private:
 
 	void startGame() {
 		removeNulls();
-        for (auto &c : clients) {
-            c.voted(false);
-        }
+		for (auto &c : clients) {
+			c.voted(false);
+		}
 		game.init();
 		sendTeams();
 		game.start();
@@ -344,10 +344,10 @@ private:
 	}
 
 	void announceDeath(int id) {
-        auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
-        ptr[0] = DEATH | ((id & 15) << 4);
-        std::string_view message(sendBuffer, 1);
-        broadcast(message);
+		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+		ptr[0] = DEATH | ((id & 15) << 4);
+		std::string_view message(sendBuffer, 1);
+		broadcast(message);
 	}
 
 	void failedElection() {
@@ -361,19 +361,19 @@ private:
 
 	private:
 	void announceName(int id) {
-	    auto &c = clients[id];
-        auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
-        ptr[0] = (id << 4) | NAME;
-        c.getName().copy(sendBuffer + 1, sizeof(sendBuffer) - 1);
+		auto &c = clients[id];
+		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+		ptr[0] = (id << 4) | NAME;
+		c.getName().copy(sendBuffer + 1, sizeof(sendBuffer) - 1);
 		std::string_view message(sendBuffer, c.getName().size() + 1);
 		for (auto i = 0; i < id; i++) {
-		    auto &k = clients[i];
-		    k.safeSend(message);
+			auto &k = clients[i];
+			k.safeSend(message);
 		}
-        for (auto i = id + 1; i < 10; i++) {
-            auto &k = clients[i];
-            k.safeSend(message);
-        }
+		for (auto i = id + 1; i < 10; i++) {
+			auto &k = clients[i];
+			k.safeSend(message);
+		}
 	}
 
 	void setName(int id, std::string_view name) {
@@ -405,12 +405,12 @@ private:
 	void eliminatePolicy(int id, int choice) {
 		if (game.getState() == game.AWAITING_PRESIDENT_POLICY && id == game.getPresidentId()) {
 			game.removePresidentPolicy(static_cast<typename Game::PolicyChoice>(choice));
-        } else if (game.getState() == game.AWAITING_CHANCELLOR_POLICY && id == game.getChancellorId()) {
-            game.removeChancellorPolicy(static_cast<typename Game::PolicyChoice>(choice));
+		} else if (game.getState() == game.AWAITING_CHANCELLOR_POLICY && id == game.getChancellorId()) {
+			game.removeChancellorPolicy(static_cast<typename Game::PolicyChoice>(choice));
 		} else if (game.getState() == game.AWAITING_CHANCELLOR_POLICY_NO_VETO && id == game.getChancellorId()) {
-		    if (choice != game.VETO) {
-                game.removeChancellorPolicy(static_cast<typename Game::PolicyChoice>(choice));
-		    }
+			if (choice != game.VETO) {
+				game.removeChancellorPolicy(static_cast<typename Game::PolicyChoice>(choice));
+			}
 		} else {
 			return;
 		}
@@ -455,7 +455,7 @@ private:
 	void castVote(int id, Vote vote) {
 		if (clients[id].voted()) return;
 		clients[id].voted(true);
-        announceVoteReceived(id);
+		announceVoteReceived(id);
 		game.addVote(id, vote);
 	}
 
@@ -487,18 +487,18 @@ private:
 
 public:
 	void sendGameKey(int id, uint32_t key) {
-        auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
-        ptr[0] = GAME_KEY;
-        ptr[1] = (key >> 24) & 255;
-        ptr[2] = (key >> 16) & 255;
-        ptr[3] = (key >> 8) & 255;
-        ptr[4] = key & 255;
-        std::string_view message(sendBuffer, 5);
-        clients[id].send(message);
+		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
+		ptr[0] = GAME_KEY;
+		ptr[1] = (key >> 24) & 255;
+		ptr[2] = (key >> 16) & 255;
+		ptr[3] = (key >> 8) & 255;
+		ptr[4] = key & 255;
+		std::string_view message(sendBuffer, 5);
+		clients[id].send(message);
 	}
 
 	enum MessageCode {
-        ANNOUNCE_ELECTION = 0,
+		ANNOUNCE_ELECTION = 0,
 		REQUEST_PRESIDENT_POLICY_CHOICE,
 		REQUEST_CHANCELLOR_POLICY_CHOICE,
 		REQUEST_INVESTIGATION,
@@ -530,14 +530,14 @@ public:
 		CHAOTIC_FASCIST_POLICY = 8 * 16 | EXTENDED,
 		REGULAR_LIBERAL_POLICY = 9 * 16 | EXTENDED,
 		CHAOTIC_LIBERAL_POLICY = 10 * 16 | EXTENDED,
-        REQUEST_CHANCELLOR_NOMINATION = 11 * 16 | EXTENDED,
+		REQUEST_CHANCELLOR_NOMINATION = 11 * 16 | EXTENDED,
 		GAME_KEY = 12 * 16 | EXTENDED
 	};
 
 	void announceElection() {
-	    for (auto &c : clients) {
-	        c.voted(false);
-	    }
+		for (auto &c : clients) {
+			c.voted(false);
+		}
 		auto chancellor = game.getChancellorId();
 		auto *ptr = reinterpret_cast<unsigned char *>(sendBuffer);
 		ptr[0] = ANNOUNCE_ELECTION | (chancellor << 4);
@@ -720,10 +720,10 @@ public:
 		}
 		switch(firstByte / 8) {
 			case 0:
-                castVote(id, JA);
+				castVote(id, JA);
 				return;
 			case 1:
-                castVote(id, NEIN);
+				castVote(id, NEIN);
 				return;
 			case 2:
 				respondToVeto(id, true);

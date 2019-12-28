@@ -1,6 +1,7 @@
 const Client = require('./client');
 
-const domain = 'localhost';
+// const domain = 'localhost';
+const domain = '13.211.160.125'
 const port = '4545';
 
 process.stdin.setEncoding('utf8');
@@ -9,14 +10,11 @@ let online = null;
 process.stdin.on('readable', () => {
 	// Use a loop to make sure we read all available data.
 	while ((chunk = process.stdin.read()) !== null) {
-		let i = chunk.indexOf('\r\n');
-		if (i < 0) {
-			i = chunk.indexOf('\n');
-		}
+		const i = chunk.indexOf('\n');
 		if (online && i >= 0) {
 			const a = chunk.substr(0, i);
 			stdinBuffer = chunk.substr(i + 1);
-			online(a);
+			online(a.trim());
 		} else {
 			stdinBuffer += chunk;
 		}
@@ -185,6 +183,8 @@ async function getSpecialNomination(options) {
 	return n;
 }
 
+let round = 1;
+
 const createHandlers = (client) => ({
 	async gameKey({ key }) {
 		console.log('Game key:', key);
@@ -192,7 +192,20 @@ const createHandlers = (client) => ({
 	async rename() {},
 	async playerReady({ player }) {
 	},
+	async team(data) {
+		console.log('Your role is:', data.role);
+		console.log();
+		if (data.roles) {
+			for ({ player, role } of data.roles) {
+				console.log(player, ':', role);
+			}
+		}
+		console.log();
+	},
 	async chancellorNomination({ president, options }) {
+		console.log('############################');
+		console.log('Round', round++);
+		console.log();
 		console.log(president, 'is picking a chancellor.');
 		console.log('Their choices are:');
 		for (const o of options) {
@@ -200,46 +213,53 @@ const createHandlers = (client) => ({
 				console.log(`* ${o.player}`);
 			}
 		}
-	},
-	async team(data) {
-		console.log('Your role is:', data.role);
-		if (data.roles) {
-			for ({ player, role } of data.roles) {
-				console.log(player, ':', role);
-			}
-		}
+		console.log();
 	},
 	async requestChancellorNomination({ options }) {
+		console.log('############################');
+		console.log('Round', round++);
+		console.log();
 		const choice = await getChancellorNomination(options);
 		client.nominateChancellor(choice);
+		console.log();
 	},
 	async election({ president, chancellor }) {
+		if (client.selfDead) {
+			return;
+		}
 		const vote = await getVote(president, chancellor);
 		client.vote(vote);
+		console.log();
 	},
 	async electionComplete({ votes, success }) {
 		const msg = success ? 'Election passed.' : 'Election failed.';
 		console.log(msg);
+		console.log();
 		for ({ player, vote } of votes) {
 			console.log(player, ':', vote);
 		}
+		console.log();
 		console.log('election tracker:', client.electionTracker);
 		console.log();
 	},
 	async voteCounted() {},
 	async presidentEliminatingPolicy({ president }) {
 		console.log('The president,', president + ', is choosing a policy');
+		console.log();
 	},
 	async chancellorEliminatingPolicy({ chancellor }) {
 		console.log('The chancellor,', chancellor + ', is choosing a policy');
+		console.log();
 	},
 	async requestPresidentPolicyElimination({ policies }) {
 		const policy = await getPresidentPolicy(policies);
 		client.eliminatePolicy(policy);
+		console.log();
 	},
 	async requestChancellorPolicyElimination({ policies, canVeto }) {
 		const policy = await getChancellorPolicy(policies, canVeto);
 		client.eliminatePolicy(policy);
+		console.log();
 	},
 	async regularFascistPolicy() {
 		console.log('fascist policy passed');
@@ -271,10 +291,12 @@ const createHandlers = (client) => ({
 	},
 	async presidentRevealPolicies() {
 		console.log('The president now knows the top three policies.\n');
+		console.log();
 	},
 	async revealPolicies({ policies }) {
 		console.log('Next three policies:');
 		console.log(policies.join(', '));
+		console.log();
 	},
 	async kill({ president, options }) {
 		console.log(president, 'can kill somebody:');
@@ -283,47 +305,69 @@ const createHandlers = (client) => ({
 				console.log(`* ${o.player}`);
 			}
 		}
+		console.log();
 	},
 	async requestKill({ options }) {
 		const victim = await getVictim(options);
 		client.killPlayer(victim);
+		console.log();
 	},
-	async death({ player }) {
-		console.log(player, 'was killed.');
+	async death({ player, president }) {
+		console.log(`${president} killed ${player}.`);
+		console.log();
+	},
+	async dead({ president }) {
+		if (role === 'hitler') {
+			console.log(president, 'killed you.');
+		} else {
+			const msg = `${president} killed you. You will no longer participate in the game, ` +
+				`and remember, dead people don\'t talk.`; 
+			console.log(msg);
+		}
+		console.log();
 	},
 	async requestVeto({ chancellor }) {
 		const accept = await getVeto(chancellor);
 		client.respondToVeto(accept);
+		console.log();
 	},
 	async presidentRequestVeto({ president, chancellor }) {
 		console.log(`${chancellor} has proposed a veto, waiting for ${president} to respond.`);
+		console.log();
 	},
 	async successfulVeto({ president, chancellor }) {
 		console.log(`${president} accepted ${chancellor}'s veto.`);
 		console.log('election tracker:', client.electionTracker);
+		console.log();
 	},
 	async failedVeto({ president, chancellor }) {
 		console.log(`${president} rejected ${chancellor}'s veto.`);
+		console.log();
 	},
 	async fascistHitlerWin() {
 		console.log('Hitler was elected. Fascists win!');
-		client.ws.close();
+		console.log();
+		client.ws.terminate();
 	},
 	async liberalHitlerWin() {
 		console.log('Hitler was killed. Liberals win!');
-		client.ws.close();
+		console.log();
+		client.ws.terminate();
 	},
 	async fascistPolicyWin() {
 		console.log('Six fascist policies were passed. Fascists win!');
-		client.ws.close();
+		console.log();
+		client.ws.terminate();
 	},
 	async liberalPolicyWin() {
 		console.log('Five liberal policies were passed. Liberals win!');
-		client.ws.close();
+		console.log();
+		client.ws.terminate();
 	},
 	async requestInvestigation({ options }) {
 		const choice = await getInvestigation(options);
 		client.revealPlayer(choice);
+		console.log();
 	},
 	async investigation({ president, options }) {
 		console.log(president, 'can reveal a player\'s team:');
@@ -332,16 +376,20 @@ const createHandlers = (client) => ({
 				console.log(`* ${o.player}`);
 			}
 		}
+		console.log();
 	},
 	async revealTeam({ player, team }) {
 		console.log(`${player} is a ${team}.`);
+		console.log();
 	},
 	async presidentRevealTeam({ player, president }) {
 		console.log(president, 'knows the party of', player + '.');
+		console.log();
 	},
 	async requestSpecialNomination({ options }) {
 		const choice = await getSpecialNomination(options);
 		client.specialNomination(choice);
+		console.log();
 	},
 	async specialNomination({ president, options }) {
 		console.log(president, 'must choose the next president:');
@@ -350,34 +398,36 @@ const createHandlers = (client) => ({
 				console.log(`* ${o.player}`);
 			}
 		}
+		console.log();
 	},
 	async disconnect({ player }) {
 		console.log(player, 'has disconnected. You will not be able to finish this game.');
+		console.log();
+		client.ws.terminate();
 	},
 });
 
-function init(client) {
+async function init(client) {
 	process.stdout.write('> ');
-	return getline().then((str) => {
-		str = str.split(/\s+/)
-		switch(str[0]) {
-			case 'join':
-				if (str.length < 2) {
-					console.log('Need a game key to join');
-					return init();
-				}
-				return client.join(str[1]);
-			case 'create':
-				if (str.length > 1 && !str.slice(1).reduce((a, b) => a && b == '', true)) {
-					console.log('You gave an extraneous argument. Did you mean to join a game?');
-					return init();
-				}
-				return client.create();
-			default:
-				console.log('Commands: "join [gameKey]" or "create"');
-				return init(client);
-		}
-	});
+	const str = await getline();
+	str = str.trim().split(/\s+/)
+	switch(str[0]) {
+		case 'join':
+			if (str.length < 2) {
+				console.log('Need a game key to join');
+				return init();
+			}
+			return client.join(str[1]);
+		case 'create':
+			if (str.length > 1 && !str.slice(1).reduce((a, b) => a && b == '', true)) {
+				console.log('You gave an extraneous argument. Did you mean to join a game?');
+				return init();
+			}
+			return client.create();
+		default:
+			console.log('Commands: "join [gameKey]" or "create"');
+			return init(client);
+	}
 }
 
 async function getName(client) {

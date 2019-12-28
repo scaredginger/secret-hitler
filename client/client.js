@@ -82,6 +82,11 @@ class Client {
 		this.vetoFlag = false;
 		this.domain = domain;
 		this.port = port;
+		this.dead = [];
+	}
+
+	get selfDead() {
+		return !!this.dead[this.id];
 	}
 
 	sendName() {
@@ -210,7 +215,7 @@ class Client {
 		const votes = this.getFlags(arr).map((flag, i) => ({
 			player: this.players[i],
 			vote: flag ? 'ja' : 'nein',
-		}));
+		})).filter((_, i) => !this.dead[i]);
 		const success = !!(arr[0] & 16);
 		if (success) {
 			this.previousPresidentId = this.presidentId;
@@ -244,16 +249,20 @@ class Client {
 		if (arr.length === 1) {
 			const otherPlayer = arr[0] >> 4;
 			if (otherPlayer === 0) {
+				this.role = 'liberal';
 				return this.publishEvent('team', { role: 'liberal' });
 			} else if (otherPlayer === 15) {
+				this.role = 'hitler';
 				return this.publishEvent('team', { role: 'hitler' });
 			} else {
+				this.role = 'hitler';
 				const roles = this.players.map(player => ({ player, role: 'liberal' }));;
 				roles[this.id].role = 'hitler';
 				roles[otherPlayer - 1].role = 'fascist';
 				return this.publishEvent('team', { role: 'hitler', roles });
 			}
 		} else {
+			this.role = 'fascist';
 			const roles = this.getFlags(arr).map((flag, i) => ({
 				player: this.players[i],
 				role: flag ? 'liberal' : 'fascist',
@@ -292,7 +301,13 @@ class Client {
 	death(arr) {
 		const i = arr[0] >> 4;
 		const player = this.players[i];
-		this.publishEvent('death', { player });
+		const president = this.players[this.presidentId];
+		this.dead[i] = true;
+		if (this.id === i) {
+			this.publishEvent('dead', { president });
+		} else {
+			this.publishEvent('death', { player, president });
+		}
 	}
 
 	parse(arr) {

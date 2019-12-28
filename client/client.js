@@ -83,6 +83,7 @@ class Client {
 		this.domain = domain;
 		this.port = port;
 		this.dead = [];
+		this.noPoliciesRemaining = 17;
 	}
 
 	get selfDead() {
@@ -366,12 +367,25 @@ class Client {
 		const newId = arr[1] >> 4;
 		this.players[newId] = this.players[oldId];
 		this.players[oldId] = null;
+		this.publishEvent('reassign');
+	}
+
+	usePolicies(n) {
+		this.policiesInDeck -= n;
+		if (this.policiesInDeck < 3) {
+			this.policiesInDeck = 17 - this.liberalPolicies - this.fascistPolicies;
+			this.publishEvent('reshuffle', { policiesInDeck: this.policiesInDeck });
+		}
 	}
 
 	regularFascistPolicy(arr) {
+		this.president = this.players[this.presidentId];
+		this.chancellor = this.players[this.chancellorId];
+
 		this.electionTracker = 0;
 		this.fascistPolicies++;
-		this.publishEvent('regularFascistPolicy', {});
+		this.usePolicies(3);
+		this.publishEvent('regularFascistPolicy', { president, chancellor });
 	}
 
 	chaoticFascistPolicy(arr) {
@@ -380,13 +394,18 @@ class Client {
 		}
 		this.fascistPolicies++;
 		this.electionTracker = 0;
+		this.usePolicies(1);
 		this.publishEvent('chaoticFascistPolicy', {});
 	}
 
 	regularLiberalPolicy(arr) {
+		this.president = this.players[this.presidentId];
+		this.chancellor = this.players[this.chancellorId];
+
 		this.liberalPolicies++;
 		this.electionTracker = 0;
-		this.publishEvent('regularLiberalPolicy', {});
+		this.usePolicies(3);
+		this.publishEvent('regularLiberalPolicy', { president, chancellor });
 	}
 
 	chaoticLiberalPolicy(arr) {
@@ -395,6 +414,7 @@ class Client {
 		}
 		this.liberalPolicies++;
 		this.electionTracker = 0;
+		this.usePolicies(1);
 		this.publishEvent('chaoticLiberalPolicy', {});
 	}
 
@@ -424,6 +444,7 @@ class Client {
 		const chancellor = this.players[this.chancellorId];
 		if (accepted) {
 			this.electionTracker++;
+			this.usePolicies(3);
 			this.publishEvent('successfulVeto', { president, chancellor });
 		} else {
 			this.publishEvent('failedVeto', { president, chancellor });

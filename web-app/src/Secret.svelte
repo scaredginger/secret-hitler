@@ -1,6 +1,6 @@
 <script>
 let displayed = false;
-export let back;
+export let ondismiss;
 
 function show() {
     displayed = true;
@@ -11,8 +11,8 @@ function hide() {
 }
 
 function onclose() {
-    if (back) {
-        back();
+    if (ondismiss) {
+        ondismiss();
     }
 }
 </script>
@@ -24,8 +24,12 @@ X
 </button>
 </div>
 
+<slot name="title">
+</slot>
+<slot name="info">
+</slot>
 {#if displayed}
-<slot>
+<slot name="hidden">
 <p>No information to display</p>
 </slot>
 {/if}

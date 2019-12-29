@@ -1,14 +1,21 @@
 <script>
-export let connection;
-let code = ''
+import { getContext } from 'svelte';
+const client = getContext('client');
+let name = '';
 
-function create() {
-    connection.create(code);
+function setName() {
+  client.create().then(() => {
+    client.setName(name);
+  });
+  return false;
 }
+
 </script>
 
 <main>
 <h3>Create a game</h3>
-<input placeholder="Room code" bind:value={code}>
-<button on:click={create}>Join</button>
+<form on:submit|preventDefault={setName}>
+    <input placeholder="Name" bind:value={name}>
+    <input type="submit" value="Join">
+</form>
 </main>

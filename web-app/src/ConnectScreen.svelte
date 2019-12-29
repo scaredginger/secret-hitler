@@ -1,9 +1,11 @@
 <script>
 import Join from './Join.svelte';
-export let connection = null;
+import Create from './Create.svelte';
+import { getContext } from 'svelte';
+
+const client = getContext('client');
 let mode = '';
 function createGame() {
-	connection.createGame();
 	mode = 'create';
 }
 
@@ -15,7 +17,9 @@ function joinGame() {
 
 <main>
 	{#if mode === 'join'}
-		<Join connection = {connection} />
+		<Join />
+	{:else if mode === 'create'}
+		<Create />
 	{:else}
 		<h1>Secret Hitler</h1>
 		<p>

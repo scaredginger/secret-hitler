@@ -1,31 +1,30 @@
 <script>
 import ConnectScreen from './ConnectScreen.svelte';
-import Reveal from './Reveal.svelte';
+import Secret from './Secret.svelte';
 import Join from './Join.svelte';
-import { Connection } from './connection.js';
-let connection = new Connection();
-let data = 'hello world'
+import Board from './Board.svelte';
+import Messages from './Messages.svelte';
+import { Client } from './client.js';
+import { setContext } from 'svelte';
+import { subscribeToClient, connected } from './stores';
+import { messageStore, subscribe } from './messageStore.js';
 
-function hideData() {
-	console.log(data)
-	data = null;
-}
+const client = new Client('localhost', 4545);
+subscribeToClient(client);
+subscribe(client);
+setContext('client', client);
+let showMessages;
+$: showMessages = ($messageStore).length > 0;
 
 </script>
 
 <main>
-<!--
-{#if connection.disconnected}
-	<ConnectScreen connection={connection} />
-{/if}
--->
-
-{#if data}
-	<Reveal back={hideData}>
-	<p>
-		{data}
-	</p>
-	</Reveal>
+{#if !$connected}
+	<ConnectScreen />
+{:else if showMessages}
+	<Messages />
+{:else}
+	<Board />
 {/if}
 
 </main>

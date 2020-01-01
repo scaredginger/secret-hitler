@@ -1,7 +1,8 @@
 <script>
-import { getContext } from 'svelte';
+import { getContext, onMount } from 'svelte';
 const client = getContext('client');
 let name = '';
+let nameInput;
 
 function setName() {
   client.create().then(() => {
@@ -10,12 +11,16 @@ function setName() {
   return false;
 }
 
+onMount(() => {
+  nameInput.focus();
+});
+
 </script>
 
 <main>
 <h3>Create a game</h3>
 <form on:submit|preventDefault={setName}>
-    <input placeholder="Name" bind:value={name}>
+    <input bind:this={nameInput} placeholder="Name" bind:value={name}>
     <input type="submit" value="Join">
 </form>
 </main>

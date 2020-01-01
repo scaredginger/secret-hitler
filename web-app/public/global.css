@@ -38,6 +38,19 @@ input, button, select, textarea {
 	box-sizing: border-box;
 	border: 1px solid #333;
 	border-radius: 2px;
+	font-size: 1.5rem;
+}
+
+h3 {
+	font-size: 3rem;
+}
+
+h4 {
+	font-size: 2rem;
+}
+
+p {
+	font-size: 1.5rem;
 }
 
 input {

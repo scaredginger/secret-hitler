@@ -81,7 +81,7 @@ export class Client {
 		this.domain = domain;
 		this.port = port;
 		this.dead = [];
-		this.noPoliciesRemaining = 17;
+		this.policiesInDeck = 17;
 
 		this.isReady = false;
 		this.votedSet = new Set();
@@ -465,10 +465,14 @@ export class Client {
 	}
 
 	connect(url) {
+		console.log(url);
 		return new Promise((resolve, reject) => {
 			try {
 				this.ws = new WebSocket(url);
+				console.log(this.ws);
 				this.ws.binaryType = 'arraybuffer';
+				this.ws.onerror = e => console.log(e);
+				this.ws.onopen = e => console.log(e);
 				this.ws.onmessage = (e) => {
 					const arr = new Uint8Array(e.data);
 					this.id = arr[0];
@@ -477,6 +481,7 @@ export class Client {
 					this.publishEvent('connect');
 				};
 			} catch (e) {
+				console.log(e);
 				reject(e);
 			}
 		});

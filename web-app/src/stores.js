@@ -15,6 +15,7 @@ let fascistPoliciesSetter,
     deadPlayersSetter,
     gameKeySetter,
     connectedSetter,
+    startedSetter,
     playerSetter;
 
 export const fascistPolicies = readable(0, (set) => {
@@ -92,6 +93,11 @@ export const players = readable('', (set) => {
 });
 players.subscribe(() => {});
 
+export const started = readable(false, (set) => {
+  startedSetter = set;
+});
+started.subscribe(() => {});
+
 const functionDict = client => ({
   connect() {
     connectedSetter(true);
@@ -155,28 +161,37 @@ const functionDict = client => ({
     statusTextSetter(`President ${president} is choosing the next president.`)
   },
   regularFascistPolicy({}) {
+    policiesInDeckSetter(client.policiesInDeck);
     fascistPoliciesSetter(client.fascistPolicies);
     electionTrackerSetter(0);
   },
   chaoticFascistPolicy({}) {
+    policiesInDeckSetter(client.policiesInDeck);
     fascistPoliciesSetter(client.fascistPolicies);
     electionTrackerSetter(0);
   },
   regularLiberalPolicy({}) {
+    policiesInDeckSetter(client.policiesInDeck);
     liberalPoliciesSetter(client.liberalPolicies);
     electionTrackerSetter(0);
   },
   chaoticLiberalPolicy({}) {
+    policiesInDeckSetter(client.policiesInDeck);
     liberalPoliciesSetter(client.liberalPolicies);
     electionTrackerSetter(0);
   },
+  requestChancellorNomination() {
+    startedSetter(true);
+  },
   chancellorNomination({ president }) {
     statusTextSetter(`President ${president} is nominating a chancellor.`);
+    startedSetter(true);
   },
   gameKey({ key }) {
     gameKeySetter(key);
   },
   successfulVeto({}) {
+    policiesInDeckSetter(client.policiesInDeck);
     electionTrackerSetter(client.electionTracker);
   },
   failedVeto({ chancellor }) {

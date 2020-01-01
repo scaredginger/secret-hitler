@@ -1,4 +1,5 @@
 <script>
+import BeforeGameStart from './BeforeGameStart.svelte';
 import ConnectScreen from './ConnectScreen.svelte';
 import Secret from './Secret.svelte';
 import Join from './Join.svelte';
@@ -6,10 +7,11 @@ import Board from './Board.svelte';
 import Messages from './Messages.svelte';
 import { Client } from './client.js';
 import { setContext } from 'svelte';
-import { subscribeToClient, connected } from './stores';
+import { subscribeToClient, connected, started } from './stores';
 import { messageStore, subscribe } from './messageStore.js';
 
-const client = new Client('localhost', 4545);
+const host = window.location.hostname;
+const client = new Client(host, 4545);
 subscribeToClient(client);
 subscribe(client);
 setContext('client', client);
@@ -21,6 +23,8 @@ $: showMessages = ($messageStore).length > 0;
 <main>
 {#if !$connected}
 	<ConnectScreen />
+{:else if !$started}
+	<BeforeGameStart />
 {:else if showMessages}
 	<Messages />
 {:else}
@@ -28,6 +32,7 @@ $: showMessages = ($messageStore).length > 0;
 {/if}
 
 </main>
+
 <style>
 	main {
 		text-align: center;

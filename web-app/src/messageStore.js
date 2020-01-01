@@ -306,6 +306,7 @@ const makeHandlers = (client) => ({
     });
   },
   reshuffle({ policiesInDeck }) {
+    console.log('reshuffle');
     push({
       type: 'text',
       title: 'Reshuffle',

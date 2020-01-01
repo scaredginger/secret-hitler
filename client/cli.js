@@ -1,7 +1,7 @@
 const Client = require('./client');
 
-// const domain = 'localhost';
-const domain = '13.211.160.125'
+const domain = 'localhost';
+// const domain = '13.211.160.125'
 const port = '4545';
 
 process.stdin.setEncoding('utf8');
@@ -409,7 +409,7 @@ const createHandlers = (client) => ({
 
 async function init(client) {
 	process.stdout.write('> ');
-	const str = await getline();
+	let str = await getline();
 	str = str.trim().split(/\s+/)
 	switch(str[0]) {
 		case 'join':

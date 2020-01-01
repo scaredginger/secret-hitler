@@ -1,6 +1,6 @@
 <script>
 import { getContext } from 'svelte'
-import { fascistPolicies, liberalPolicies, gameKey, players, electionTracker, statusText } from './stores';
+import { fascistPolicies, liberalPolicies, gameKey, players, electionTracker, statusText, policiesInDeck } from './stores';
 
 const client = getContext('client');
 let ready = client.isReady;
@@ -19,14 +19,14 @@ function readyUp() {
   <p id="status">
     {$statusText}
   </p>
-  <p id="gameKey">
-    {$gameKey}
+  <p id="liberalPolicies">
+    LIBERAL: { $liberalPolicies }
   </p>
   <p id="fascistPolicies">
     FASCIST: { $fascistPolicies }
   </p>
-  <p id="liberalPolicies">
-    LIBERAL: { $liberalPolicies }
+  <p id="policiesInDeck">
+    Policies in deck: { $policiesInDeck }
   </p>
   <p id="tracker">
     Election Tracker: { $electionTracker }

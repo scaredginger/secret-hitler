@@ -28,22 +28,10 @@ const f = option => () => ondecision(option);
 </main>
 
 <style>
-#close-button {
-    position: relative;
-    top: 0;
-    right: 0;
-    left: 100%;
-    transform: translateX(-100%);
-    height: 10%;
-    width: 100%;
-    text-align: right;
-    font-size: 2em;
-}
-
 slot {
     position: relative;
-    height: 70%;
 }
+
 main {
     height: 100%;
 }

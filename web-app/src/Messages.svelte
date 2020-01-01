@@ -79,17 +79,21 @@ function handleDecision(decision) {
     </h3>
     <div slot="text">
       <h4>Ja</h4>
-      {#each currentMessage.votes.filter(item => item.vote === 'ja') as item}
-        <p>
-          { item.player }
-        </p>
-      {/each}
+      <ul>
+        {#each currentMessage.votes.filter(item => item.vote === 'ja') as item}
+          <li>
+            { item.player }
+          </li>
+        {/each}
+      </ul>
       <h4>Nein</h4>
-      {#each currentMessage.votes.filter(item => item.vote === 'nein') as item}
-        <p>
-          { item.player }
-        </p>
-      {/each}
+      <ul>
+        {#each currentMessage.votes.filter(item => item.vote === 'nein') as item}
+          <li>
+            { item.player }
+          </li>
+        {/each}
+      </ul>
     </div>
   </TextMessage>
 {:else if currentMessage.type === 'team'}
